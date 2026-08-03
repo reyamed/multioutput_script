@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# https://excalidraw.com/#json=GcwKgg_oFcdtu7VeqFbpC,mY-hPMLVPE42n-ULAKYHlA
 """Elasticsearch bulk sender with a dynamically retargetable cluster.
 
 The Elasticsearch hosts are no longer read from "config.yml": they are
