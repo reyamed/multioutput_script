@@ -1,0 +1,14 @@
+kafka:
+  bootstrap_servers: localhost:9092
+
+laas_api:
+  url: http://laas-api.example.com
+  token: CHANGE_ME
+
+streamer_api:
+  url: http://streamer-api.example.com
+  token: CHANGE_ME
+
+# flows: [flow1, flow2]
+# source: cluster-a
+# dest: cluster-b
