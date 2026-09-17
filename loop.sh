@@ -22,3 +22,5 @@ while true; do
   i=$((i+1))
   sleep 2
 done
+
+#=SUMPRODUCT(ISNUMBER(SEARCH("dc",A2:A110)) * ((RIGHT(D2:D110,2)="tb")*VALUE(LEFT(D2:D110,LEN(D2:D110)-2))*1024 + (RIGHT(D2:D110,2)="gb")*VALUE(LEFT(D2:D110,LEN(D2:D110)-2))))
