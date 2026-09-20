@@ -32,6 +32,7 @@ from collections import defaultdict
 
 PLACE_T = 1096   # saturation horizon for PLACEMENT (endgame balance)
 RAMP_T  = 92     # snapshot horizon reported alongside (state 3 months after redirection)
+EARLY_T = 14     # early snapshot (2 weeks after redirection: hot/shard load before cold fills)
 
 # disk budgets = 50% of each pool; shards = one cluster-wide budget
 CLUSTERS = {
@@ -82,7 +83,8 @@ def collect(es):
     # accumulate every retention-stream up to its flow, so a flow moves as one unit
     flows = defaultdict(lambda: {"R": set(),
         "hot_gb":0.0,"cold_gb":0.0,"sh":0,"live":0,
-        "r_hot":0.0,"r_cold":0.0,"r_sh":0,"r_live":0})
+        "r_hot":0.0,"r_cold":0.0,"r_sh":0,"r_live":0,
+        "e_hot":0.0,"e_cold":0.0,"e_sh":0,"e_live":0})
 
     for (code, R), items in streams.items():
         period = PERIOD[R]
@@ -93,10 +95,12 @@ def collect(es):
 
         p_hot, p_cold, p_sh, p_live = footprint(full_gb, bucket_sh, R, period, PLACE_T)  # endgame
         r_hot, r_cold, r_sh, r_live = footprint(full_gb, bucket_sh, R, period, RAMP_T)   # 3 months
+        e_hot, e_cold, e_sh, e_live = footprint(full_gb, bucket_sh, R, period, EARLY_T)  # 2 weeks
 
         f = flows[code]; f["R"].add(R)
         f["hot_gb"]+=p_hot; f["cold_gb"]+=p_cold; f["sh"]+=p_sh; f["live"]+=p_live
         f["r_hot"]+=r_hot;  f["r_cold"]+=r_cold;  f["r_sh"]+=r_sh; f["r_live"]+=r_live
+        f["e_hot"]+=e_hot;  f["e_cold"]+=e_cold;  f["e_sh"]+=e_sh; f["e_live"]+=e_live
 
     rows = []
     for code, f in flows.items():
@@ -109,6 +113,8 @@ def collect(es):
             "gb": round(gb,1), "sh": f["sh"], "live": f["live"],
             "ramp_hot_gb": round(f["r_hot"],1), "ramp_cold_gb": round(f["r_cold"],1),
             "ramp_gb": round(f["r_hot"]+f["r_cold"],1), "ramp_sh": f["r_sh"], "ramp_live": f["r_live"],
+            "early_hot_gb": round(f["e_hot"],1), "early_cold_gb": round(f["e_cold"],1),
+            "early_gb": round(f["e_hot"]+f["e_cold"],1), "early_sh": f["e_sh"], "early_live": f["e_live"],
         })
     return pd.DataFrame(rows).sort_values("gb", ascending=False)
 
@@ -117,7 +123,6 @@ def distribute(df):
     thot = sum(c["hot_gb"]    for c in CLUSTERS.values())
     tcol = sum(c["cold_gb"]   for c in CLUSTERS.values())
     tsh  = sum(c["sh_budget"] for c in CLUSTERS.values())
-    # How heavy is the flow in term of hot, cold and shard capacity
     move["demand"] = move.apply(lambda r: max(r["hot_gb"]/thot, r["cold_gb"]/tcol, r["sh"]/tsh), axis=1)
     move = move.sort_values("demand", ascending=False)
 
@@ -149,12 +154,14 @@ def summary(plan, hot_key, cold_key, sh_key):
 def export(plan, df, path="distribution_plan.xlsx"):
     cols = ["flow","class","retentions","cluster","over_budget",
             "hot_gb","cold_gb","gb","sh","live",
-            "ramp_hot_gb","ramp_cold_gb","ramp_gb","ramp_sh","ramp_live"]
+            "ramp_hot_gb","ramp_cold_gb","ramp_gb","ramp_sh","ramp_live",
+            "early_hot_gb","early_cold_gb","early_gb","early_sh","early_live"]
     assignments = plan[cols].sort_values(["cluster","gb"], ascending=[True,False])
     kept = df[df["class"].isin(["major","big"])].assign(cluster="source")
     with pd.ExcelWriter(path) as w:
         assignments.to_excel(w, sheet_name="flow_assignments", index=False)
         summary(plan, "hot_gb", "cold_gb", "sh").to_excel(w, sheet_name="summary_endgame", index=False)
+        summary(plan, "early_hot_gb", "early_cold_gb", "early_sh").to_excel(w, sheet_name="summary_2weeks", index=False)
         summary(plan, "ramp_hot_gb", "ramp_cold_gb", "ramp_sh").to_excel(w, sheet_name="summary_3months", index=False)
         kept.to_excel(w, sheet_name="kept_on_source", index=False)
     return path
