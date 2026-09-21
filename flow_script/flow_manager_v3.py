@@ -61,7 +61,7 @@ def parse(name):
 
 def footprint(full_gb, bucket_sh, R, period, T):
     """One retention-stream's state at T days after redirection (fills from empty)."""
-    live = math.ceil(min(T, R) / period)      # buckets present at time T
+    live = math.ceil(min(T, R) / period)      # buckets present at time T. A bucket is how many batch of indices will be created during that period
     hot_gb  = full_gb                         # current bucket = one, per stream
     cold_gb = (live - 1) * full_gb
     return hot_gb, cold_gb, live * bucket_sh, live
