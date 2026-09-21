@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Cluster Packing</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#fff; --panel2:#fbfcfd; --ink:#161a20; --muted:#697586; --faint:#9aa4b2;
+  --border:#e3e7ec; --border2:#eef1f4; --accent:#3b5bdb; --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.05);
+  --ok:#12b76a; --ok-bg:#e9f9f1; --warn:#f79009; --warn-bg:#fef4e6; --bad:#e5484d; --bad-bg:#fdeceb;
+  --hot:#7c5cff; --cold:#0ea5e9; --shard:#f59e0b;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d0f13; --panel:#161a21; --panel2:#12151b; --ink:#e6e9ef; --muted:#98a2b3; --faint:#69707d;
+  --border:#262b34; --border2:#20242c; --accent:#8098ff; --shadow:0 1px 2px rgba(0,0,0,.4);
+  --ok:#3ddc97; --ok-bg:#12291f; --warn:#f7b955; --warn-bg:#2a2113; --bad:#ff6b6f; --bad-bg:#2c1618;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d0f13; --panel:#161a21; --panel2:#12151b; --ink:#e6e9ef; --muted:#98a2b3; --faint:#69707d;
+  --border:#262b34; --border2:#20242c; --accent:#8098ff; --shadow:0 1px 2px rgba(0,0,0,.4);
+  --ok:#3ddc97; --ok-bg:#12291f; --warn:#f7b955; --warn-bg:#2a2113; --bad:#ff6b6f; --bad-bg:#2c1618;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1320px;margin:0 auto;padding:18px 18px 80px}
+h1{font-size:18px;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+section{margin-top:22px}
+.sechead{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}
+.sechead h2{font-size:13px;font-weight:700;margin:0;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.sechead .note{font-size:12px;color:var(--faint)}
+
+/* top bar */
+.topbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+.brandrow{display:flex;flex-direction:column}
+.spacer{flex:1 1 auto}
+.btn{display:inline-flex;align-items:center;gap:7px;cursor:pointer;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 13px;font-size:12.5px;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--border)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.status{color:var(--muted);font-size:12px}.status b{color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;background:var(--panel2)}
+.seg button{background:transparent;color:var(--muted);border:none;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;border-right:1px solid var(--border)}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--accent);color:#fff}
+.field{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.field input[type=number]{width:64px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px}
+.banner{display:none;align-items:center;gap:9px;border-radius:9px;padding:9px 12px;font-size:12.5px;font-weight:600;margin-top:12px}
+.banner.show{display:flex}
+.banner.bad{background:var(--bad-bg);color:var(--bad)}
+.banner.ok{background:var(--ok-bg);color:var(--ok)}
+
+/* cluster cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:13px 14px;cursor:pointer;transition:border-color .12s,box-shadow .12s;position:relative}
+.card:hover{border-color:var(--accent)}
+.card.sel{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.card.breach{border-color:var(--bad)}
+.card.breach.sel{box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 25%,transparent)}
+.card .top{display:flex;align-items:center;gap:8px;margin-bottom:11px}
+.card .cname{font-weight:700;font-size:13.5px;font-family:var(--mono)}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+.chip{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:5px;letter-spacing:.02em}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.gauge{margin:9px 0}
+.gauge .lab{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:4px}
+.gauge .lab .dim{font-weight:700;display:flex;align-items:center;gap:6px}
+.gauge .lab .val{font-family:var(--mono);color:var(--muted)}
+.gauge .lab .val b{color:var(--ink)}
+.gswatch{width:8px;height:8px;border-radius:2px;display:inline-block}
+.track{position:relative;height:12px;border-radius:6px;background:var(--border2);overflow:hidden}
+.fill{position:absolute;top:0;left:0;height:100%;border-radius:6px 0 0 6px}
+.limit{position:absolute;top:-2px;height:16px;width:2px;background:var(--ink);opacity:.55}
+.limit::after{content:"";position:absolute}
+.editbtn{font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px}
+.editor{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:none;grid-template-columns:1fr 1fr;gap:8px}
+.editor.show{display:grid}
+.editor label{font-size:11px;color:var(--muted);display:block}
+.editor input{width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12px;margin-top:2px}
+
+/* ramp */
+.ramp{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.mini{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:11px 12px}
+.mini .t{font-weight:700;font-size:12.5px;font-family:var(--mono);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.leg{display:flex;gap:12px;margin:2px 0 8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.leg span{display:inline-flex;align-items:center;gap:5px}
+
+/* filters + table */
+.filters{display:flex;flex-wrap:wrap;gap:9px;align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow);margin-bottom:10px}
+.filters .search{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px;min-width:150px}
+.fgroup{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.fgroup .glab{font-size:11px;color:var(--faint);margin-right:2px}
+.tog{font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);cursor:pointer;white-space:nowrap}
+.tog.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tog.bad.on{background:var(--bad);border-color:var(--bad)}
+.tblwrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.thead,.trow{display:grid;grid-template-columns:34px 1.5fr .9fr 1fr .95fr 86px 86px 92px;align-items:center}
+.thead{position:sticky;top:0;background:var(--panel2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;z-index:2}
+.thead>div{padding:9px 10px;cursor:pointer;user-select:none;white-space:nowrap}
+.thead .num,.trow .num{text-align:right;font-family:var(--mono)}
+.thead .sorted{color:var(--accent)}
+.vscroll{height:440px;overflow:auto;position:relative}
+.vsizer{position:relative;width:100%}
+.trow{position:absolute;left:0;right:0;height:34px;border-bottom:1px solid var(--border2);font-size:12.5px;cursor:pointer}
+.trow:hover{background:var(--panel2)}
+.trow.sel{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.trow.over{box-shadow:inset 3px 0 0 var(--bad)}
+.trow>div{padding:0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow .fid{font-family:var(--mono);font-size:12px}
+.badge{font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.badge.multi{background:color-mix(in srgb,var(--hot) 18%,transparent);color:var(--hot)}
+.flag{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--bad)}
+.empty{padding:34px;text-align:center;color:var(--faint)}
+
+/* drill panel */
+.drill{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:14px;margin-top:10px;display:none}
+.drill.show{display:block}
+.drill h3{margin:0 0 3px;font-size:14px;font-family:var(--mono)}
+.drill .meta{color:var(--muted);font-size:12px;margin-bottom:10px}
+.stream-h,.stream-r{display:grid;grid-template-columns:1fr 92px 92px 96px;align-items:center;font-size:12.5px}
+.stream-h{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700;border-bottom:1px solid var(--border);padding-bottom:5px}
+.stream-r{padding:6px 0;border-bottom:1px solid var(--border2)}
+.stream-r .num,.stream-h .num{text-align:right;font-family:var(--mono)}
+.tight{font-weight:700}
+.foot{color:var(--faint);font-size:11.5px;margin-top:20px;line-height:1.7}
+.foot code{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:11px}
+.tip{position:fixed;pointer-events:none;z-index:50;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:8px 10px;font-size:12px;opacity:0;transition:opacity .1s;max-width:240px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brandrow">
+      <h1>Cluster Packing Dashboard</h1>
+      <span class="sub">hot / cold / shards budgets per target cluster — kept independent, never summed</span>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn" id="loadBtn">📂 Load planner .xlsx</button>
+    <input type="file" id="file" accept=".xlsx,.xls" style="display:none"/>
+    <span class="status" id="status">Showing <b>synthetic demo</b> (has an over-limit case) · load your export to replace it</span>
+  </div>
+
+  <div class="topbar" style="margin-top:10px">
+    <div class="field"><span>Horizon</span>
+      <span class="seg" id="horizonSeg"></span>
+    </div>
+    <div class="field">50% ratio (hot/cold)
+      <input type="number" id="ratio" min="0.05" max="1" step="0.05" value="0.50"/>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="repackBtn" title="Re-run the Python packer">↻ Re-pack (Python)</button>
+    <button class="btn ghost" id="resetBtn">Reset what-if</button>
+  </div>
+
+  <div class="banner bad" id="breachBanner"></div>
+
+  <section>
+    <div class="sechead"><h2>Cluster health</h2><span class="note" id="healthNote"></span></div>
+    <div class="grid" id="clusterGrid"></div>
+  </section>
+
+  <section>
+    <div class="sechead"><h2>Ramp over time</h2><span class="note">utilization vs limit across horizons — a line crossing 100% at a later horizon is a time-bomb</span></div>
+    <div class="ramp" id="rampGrid"></div>
+  </section>
+
+  <section>
+    <div class="sechead"><h2>Flows</h2><span class="note" id="flowNote"></span></div>
+    <div class="filters">
+      <input class="search" id="search" placeholder="search flow / class…"/>
+      <div class="fgroup" id="classFilter"><span class="glab">class</span></div>
+      <div class="fgroup" id="clusterFilter"><span class="glab">cluster</span></div>
+      <span class="spacer"></span>
+      <button class="tog bad" id="overTog">⚑ over-budget only</button>
+      <button class="tog" id="multiTog">multi-retention only</button>
+    </div>
+    <div class="tblwrap">
+      <div class="thead" id="thead"></div>
+      <div class="vscroll" id="vscroll"><div class="vsizer" id="vsizer"></div>
+        <div class="empty" id="tblEmpty" style="display:none">No flows match these filters.</div>
+      </div>
+    </div>
+    <div class="drill" id="drill"></div>
+  </section>
+
+  <div class="foot" id="schemaFoot"></div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+/* ============================ constants ============================ */
+const DIMS=['hot','cold','shards'];
+const DIM_LABEL={hot:'Hot',cold:'Cold',shards:'Shards'};
+const HORIZONS=['2wk','3mo','endgame'];
+const HZLAB={'2wk':'2 wk','3mo':'3 mo','endgame':'endgame'};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const DIMC={hot:()=>css('--hot'),cold:()=>css('--cold'),shards:()=>css('--shard')};
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const tip=$('#tip');
+
+/* ============================ state ============================ */
+let MODEL=null;              // {clusters, flows}
+let VIEW={horizon:'endgame', ratio:0.5, selCluster:null, selFlow:null,
+          fClass:new Set(), fCluster:new Set(), fOver:false, fMulti:false, q:'',
+          sortKey:'shards', sortDir:-1};
+let USAGE=null;              // usage[clusterId][horizon][dim]  (from assignments; cached)
+let filtered=[];             // sorted, filtered flow index list
+
+/* ============================ helpers ============================ */
+const fmtTB=x=>{ if(x>=1) return (x>=100?x.toFixed(0):x>=10?x.toFixed(1):x.toFixed(2))+' TB';
+  const g=x*1000; return (g>=100?g.toFixed(0):g.toFixed(1))+' GB'; };  // stores are TB internally; shows GB below 1 TB
+const fmtInt=x=> Math.round(x).toLocaleString('en-US');
+const fmtPct=u=> (u*100).toFixed(u>=10?0:0)+'%';
+const dimVal=(dim,x)=> dim==='shards'? fmtInt(x): fmtTB(x);
+function clusterOf(id){return MODEL.clusters.find(c=>c.id===id);}
+function limitOf(cl,dim){
+  if(dim==='shards') return cl.shard_cap;
+  const r=(cl.ratio??VIEW.ratio);
+  return r*(dim==='hot'?cl.hot_tb:cl.cold_tb);
+}
+function util(cl,horizon,dim){
+  const lim=limitOf(cl,dim); const use=USAGE[cl.id][horizon][dim];
+  return lim>0? use/lim : (use>0?Infinity:0);
+}
+function clusterStatus(cl){ // {now:util at view horizon, worstAny, breachNow, breachLater}
+  let breachNow=false, breachLater=false, worst=0;
+  for(const h of HORIZONS){ for(const d of DIMS){
+    const u=util(cl,h,d); if(u>worst) worst=u;
+    if(u>1){ if(h===VIEW.horizon) breachNow=true; else if(HORIZONS.indexOf(h)>HORIZONS.indexOf(VIEW.horizon)) breachLater=true; }
+  }}
+  // breachNow should reflect view horizon specifically
+  breachNow=DIMS.some(d=>util(cl,VIEW.horizon,d)>1);
+  breachLater=!breachNow && HORIZONS.filter(h=>HORIZONS.indexOf(h)>HORIZONS.indexOf(VIEW.horizon))
+                 .some(h=>DIMS.some(d=>util(cl,h,d)>1));
+  return {breachNow,breachLater,worst};
+}
+function tightestDim(cl,horizon){ let bd=DIMS[0],bu=-1; for(const d of DIMS){const u=util(cl,horizon,d); if(u>bu){bu=u;bd=d;}} return bd; }
+function showTip(e,html){tip.innerHTML=html;tip.style.opacity=1;const p=12;let x=e.clientX+p,y=e.clientY+p;const r=tip.getBoundingClientRect();if(x+r.width>innerWidth)x=e.clientX-r.width-p;if(y+r.height>innerHeight)y=e.clientY-r.height-p;tip.style.left=x+'px';tip.style.top=y+'px';}
+function hideTip(){tip.style.opacity=0;}
+
+/* ============================ usage cache ============================ */
+function recomputeUsage(){
+  if(MODEL.usage){ USAGE=MODEL.usage; return; }   // authoritative per-cluster totals from the planner's summary sheets
+  USAGE={};
+  for(const cl of MODEL.clusters){USAGE[cl.id]={}; for(const h of HORIZONS) USAGE[cl.id][h]={hot:0,cold:0,shards:0};}
+  for(const f of MODEL.flows){ const u=USAGE[f.cluster]; if(!u) continue;
+    for(const h of HORIZONS){ u[h].hot+=f.foot[h].hot; u[h].cold+=f.foot[h].cold; u[h].shards+=f.foot[h].shards; } }
+}
+
+/* ============================ render: top ============================ */
+function renderHorizonSeg(){
+  const seg=$('#horizonSeg'); seg.innerHTML='';
+  HORIZONS.forEach(h=>{const b=document.createElement('button');b.textContent=HZLAB[h];b.className=h===VIEW.horizon?'on':'';
+    b.onclick=()=>{VIEW.horizon=h;renderAll();};seg.appendChild(b);});
+}
+function renderBanner(){
+  const breached=MODEL.clusters.filter(c=>clusterStatus(c).breachNow);
+  const later=MODEL.clusters.filter(c=>{const s=clusterStatus(c);return !s.breachNow&&s.breachLater;});
+  const b=$('#breachBanner');
+  if(breached.length){b.className='banner bad show';
+    b.innerHTML=`⚠️ ${breached.length} cluster${breached.length>1?'s':''} OVER LIMIT at ${HZLAB[VIEW.horizon]}: `+
+      breached.map(c=>`<span style="font-family:var(--mono)">${c.id}</span> (${DIMS.filter(d=>util(c,VIEW.horizon,d)>1).map(d=>DIM_LABEL[d]).join(', ')})`).join(' · ');
+  }else if(later.length){b.className='banner bad show';b.style.background='var(--warn-bg)';b.style.color='var(--warn)';
+    b.innerHTML=`⏳ All clear at ${HZLAB[VIEW.horizon]}, but ${later.length} cluster${later.length>1?'s':''} breach later: `+
+      later.map(c=>`<span style="font-family:var(--mono)">${c.id}</span>`).join(' · ');
+  }else{b.className='banner ok show';b.style.background='';b.style.color='';b.innerHTML=`✓ All clusters within budget at every horizon.`;}
+}
+
+/* ============================ render: cluster cards ============================ */
+function gauge(cl,dim){
+  const h=VIEW.horizon, u=util(cl,h,dim), use=USAGE[cl.id][h][dim], lim=limitOf(cl,dim);
+  const SCALE=1.5; // track shows 0..150% of limit; limit marker at 66.7%
+  const fillPct=Math.min(u,SCALE)/SCALE*100, markPct=100/SCALE;
+  const band=u>1?'bad':u>0.8?'warn':'ok';
+  const col=u>1?css('--bad'):u>0.8?css('--warn'):css('--ok');
+  const g=document.createElement('div');g.className='gauge';
+  g.innerHTML=`<div class="lab">
+      <span class="dim"><span class="gswatch" style="background:${DIMC[dim]()}"></span>${DIM_LABEL[dim]}</span>
+      <span class="val"><b>${fmtPct(u)}</b> · ${dimVal(dim,use)} / ${dimVal(dim,lim)}</span>
+    </div>
+    <div class="track">
+      <div class="fill" style="width:${fillPct}%;background:${col}"></div>
+      <div class="limit" style="left:${markPct}%"></div>
+    </div>`;
+  g.querySelector('.track').addEventListener('mousemove',e=>showTip(e,
+    `<b>${cl.id} · ${DIM_LABEL[dim]}</b><br>${HZLAB[h]}: ${dimVal(dim,use)} of ${dimVal(dim,lim)} limit<br>`+
+    `<b style="color:${col}">${fmtPct(u)} of limit</b>${u>1?' — OVER':''}`));
+  g.querySelector('.track').addEventListener('mouseleave',hideTip);
+  return g;
+}
+function renderClusters(){
+  const grid=$('#clusterGrid'); grid.innerHTML='';
+  let breachCount=0;
+  MODEL.clusters.forEach(cl=>{
+    const s=clusterStatus(cl); if(s.breachNow)breachCount++;
+    const card=document.createElement('div');
+    card.className='card'+(cl.id===VIEW.selCluster?' sel':'')+(s.breachNow?' breach':'');
+    const dotc=s.breachNow?'bad':s.breachLater?'warn':'ok';
+    const chip=s.breachNow?'<span class="chip bad">OVER LIMIT</span>':s.breachLater?'<span class="chip warn">TIME-BOMB</span>':'';
+    const top=document.createElement('div');top.className='top';
+    top.innerHTML=`<span class="dot ${dotc}"></span><span class="cname">${cl.id}</span>${chip}`;
+    card.appendChild(top);
+    DIMS.forEach(d=>card.appendChild(gauge(cl,d)));
+    const eb=document.createElement('button');eb.className='editbtn';eb.textContent='✎ edit budgets (what-if)';
+    const ed=document.createElement('div');ed.className='editor';
+    ed.innerHTML=`
+      <div><label>Hot TB cap</label><input type="number" step="0.1" data-k="hot_tb" value="${cl.hot_tb}"></div>
+      <div><label>Cold TB cap</label><input type="number" step="1" data-k="cold_tb" value="${cl.cold_tb}"></div>
+      <div><label>Shard cap</label><input type="number" step="1000" data-k="shard_cap" value="${cl.shard_cap}"></div>
+      <div><label>Ratio (blank=global)</label><input type="number" step="0.05" min="0.05" max="1" data-k="ratio" value="${cl.ratio??''}"></div>`;
+    eb.onclick=e=>{e.stopPropagation();ed.classList.toggle('show');};
+    ed.addEventListener('click',e=>e.stopPropagation());
+    ed.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',()=>{
+      const k=inp.dataset.k; const v=inp.value.trim();
+      cl[k]= v===''? (k==='ratio'?null:cl[k]) : parseFloat(v);
+      renderBanner();renderClusters();renderRamp();renderTable();
+    }));
+    card.appendChild(eb);card.appendChild(ed);
+    card.onclick=()=>{drillCluster(cl.id);};
+    grid.appendChild(card);
+  });
+  $('#healthNote').textContent=breachCount?`${breachCount} over limit at ${HZLAB[VIEW.horizon]}`:`all within budget at ${HZLAB[VIEW.horizon]}`;
+}
+
+/* ============================ render: ramp small-multiples ============================ */
+function renderRamp(){
+  const grid=$('#rampGrid'); grid.innerHTML='';
+  MODEL.clusters.forEach(cl=>{
+    const W=232,H=116,pad={l:30,r:10,t:10,b:20};
+    const iw=W-pad.l-pad.r, ih=H-pad.t-pad.b;
+    let ymax=1.2; for(const h of HORIZONS)for(const d of DIMS)ymax=Math.max(ymax,util(cl,h,d));
+    ymax=Math.min(ymax,3); const x=i=>pad.l+iw*i/(HORIZONS.length-1); const y=v=>pad.t+ih*(1-Math.min(v,ymax)/ymax);
+    const el=document.createElement('div');el.className='mini';
+    const s=clusterStatus(cl);
+    const tag=s.breachNow?'<span class="chip bad">OVER</span>':s.breachLater?'<span class="chip warn">LATE</span>':'';
+    let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">`;
+    // 100% ref line
+    svg+=`<line x1="${pad.l}" y1="${y(1)}" x2="${W-pad.r}" y2="${y(1)}" stroke="${css('--bad')}" stroke-dasharray="3 3" stroke-width="1" opacity=".7"/>`;
+    svg+=`<text x="${W-pad.r}" y="${y(1)-3}" text-anchor="end" font-size="8.5" fill="${css('--bad')}">100%</text>`;
+    // axis labels
+    HORIZONS.forEach((h,i)=>svg+=`<text x="${x(i)}" y="${H-6}" text-anchor="middle" font-size="9" fill="${css('--muted')}">${HZLAB[h]}</text>`);
+    DIMS.forEach(d=>{
+      const pts=HORIZONS.map((h,i)=>[x(i),y(util(cl,h,d))]);
+      svg+=`<polyline fill="none" stroke="${DIMC[d]()}" stroke-width="2" points="${pts.map(p=>p.join(',')).join(' ')}"/>`;
+      pts.forEach((p,i)=>{const over=util(cl,HORIZONS[i],d)>1;
+        svg+=`<circle cx="${p[0]}" cy="${p[1]}" r="${over?3.4:2.4}" fill="${over?css('--bad'):DIMC[d]()}" stroke="var(--panel)" stroke-width="1"/>`;});
+    });
+    svg+='</svg>';
+    el.innerHTML=`<div class="t"><span>${cl.id}</span>${tag}</div>
+      <div class="leg">${DIMS.map(d=>`<span><span class="gswatch" style="background:${DIMC[d]()}"></span>${DIM_LABEL[d]}</span>`).join('')}</div>${svg}`;
+    grid.appendChild(el);
+  });
+}
+
+/* ============================ filters ============================ */
+function buildFilterChips(){
+  const classes=[...new Set(MODEL.flows.map(f=>f.cls))].sort();
+  const clusters=MODEL.clusters.map(c=>c.id);
+  const cf=$('#classFilter'); cf.querySelectorAll('.tog').forEach(e=>e.remove());
+  classes.forEach(c=>{const b=document.createElement('button');b.className='tog';b.textContent=c;
+    b.onclick=()=>{VIEW.fClass.has(c)?VIEW.fClass.delete(c):VIEW.fClass.add(c);b.classList.toggle('on');renderTable();};cf.appendChild(b);});
+  const uf=$('#clusterFilter'); uf.querySelectorAll('.tog').forEach(e=>e.remove());
+  clusters.forEach(c=>{const b=document.createElement('button');b.className='tog';b.dataset.cl=c;b.textContent=c;
+    b.onclick=()=>{VIEW.fCluster.has(c)?VIEW.fCluster.delete(c):VIEW.fCluster.add(c);syncClusterChips();renderTable();};uf.appendChild(b);});
+}
+function syncClusterChips(){$('#clusterFilter').querySelectorAll('.tog').forEach(b=>b.classList.toggle('on',VIEW.fCluster.has(b.dataset.cl)));}
+
+/* ============================ table (virtualized) ============================ */
+const ROWH=34, COLS=[
+  {k:'flag',lab:'',sort:false},
+  {k:'id',lab:'Flow',num:false},
+  {k:'cls',lab:'Class',num:false},
+  {k:'cluster',lab:'Cluster',num:false},
+  {k:'ret',lab:'Retentions',num:false},
+  {k:'hot',lab:'Hot',num:true},
+  {k:'cold',lab:'Cold',num:true},
+  {k:'shards',lab:'Shards',num:true},
+];
+function renderHead(){
+  const th=$('#thead'); th.innerHTML='';
+  COLS.forEach(c=>{const d=document.createElement('div');
+    d.className=(c.num?'num ':'')+(VIEW.sortKey===c.k?'sorted':'');
+    const arrow=VIEW.sortKey===c.k?(VIEW.sortDir<0?' ↓':' ↑'):'';
+    d.textContent=c.lab+arrow;
+    if(c.sort!==false)d.onclick=()=>{if(VIEW.sortKey===c.k)VIEW.sortDir*=-1;else{VIEW.sortKey=c.k;VIEW.sortDir=c.num?-1:1;}renderTable();};
+    th.appendChild(d);});
+}
+function flowVal(f,k){const h=VIEW.horizon;
+  if(k==='hot'||k==='cold'||k==='shards')return f.foot[h][k];
+  if(k==='ret')return f.retentions.length;
+  return (f[k===''?'':k]??'');
+}
+function applyFilters(){
+  const q=VIEW.q.toLowerCase();
+  filtered=[];
+  MODEL.flows.forEach((f,i)=>{
+    if(VIEW.fClass.size&&!VIEW.fClass.has(f.cls))return;
+    if(VIEW.fCluster.size&&!VIEW.fCluster.has(f.cluster))return;
+    if(VIEW.fOver&&!f.over_budget)return;
+    if(VIEW.fMulti&&!f.multi)return;
+    if(q&&!(f.id.toLowerCase().includes(q)||f.cls.toLowerCase().includes(q)))return;
+    filtered.push(i);
+  });
+  const k=VIEW.sortKey,dir=VIEW.sortDir,h=VIEW.horizon;
+  const val=i=>{const f=MODEL.flows[i];
+    if(k==='hot'||k==='cold'||k==='shards')return f.foot[h][k];
+    if(k==='ret')return f.retentions.length;
+    if(k==='id'||k==='cls'||k==='cluster')return f[k]; return 0;};
+  filtered.sort((a,b)=>{const va=val(a),vb=val(b);
+    if(typeof va==='string')return dir*va.localeCompare(vb);
+    return dir*(va-vb);});
+}
+let lastWin=[-1,-1];
+function renderRows(force){
+  const sc=$('#vscroll'), sizer=$('#vsizer');
+  sizer.style.height=(filtered.length*ROWH)+'px';
+  $('#tblEmpty').style.display=filtered.length?'none':'block';
+  const st=sc.scrollTop, vh=sc.clientHeight, buf=6;
+  let start=Math.max(0,Math.floor(st/ROWH)-buf);
+  let end=Math.min(filtered.length,Math.ceil((st+vh)/ROWH)+buf);
+  if(!force&&start===lastWin[0]&&end===lastWin[1])return; lastWin=[start,end];
+  [...sizer.querySelectorAll('.trow')].forEach(e=>e.remove());
+  const h=VIEW.horizon;
+  for(let r=start;r<end;r++){
+    const f=MODEL.flows[filtered[r]];
+    const row=document.createElement('div');
+    row.className='trow'+(f.over_budget?' over':'')+(f.id===VIEW.selFlow?' sel':'');
+    row.style.top=(r*ROWH)+'px';
+    row.innerHTML=`<div>${f.over_budget?'<span class="flag" title="over budget"></span>':''}</div>
+      <div class="fid">${f.id}</div>
+      <div>${f.cls}</div>
+      <div class="fid">${f.cluster}</div>
+      <div>${f.retentions.join(',')}${f.multi?'<span class="badge multi">multi</span>':''}</div>
+      <div class="num">${fmtTB(f.foot[h].hot)}</div>
+      <div class="num">${fmtTB(f.foot[h].cold)}</div>
+      <div class="num">${fmtInt(f.foot[h].shards)}</div>`;
+    row.onclick=()=>drillFlow(f.id);
+    sizer.appendChild(row);
+  }
+}
+function renderTable(){applyFilters();renderHead();lastWin=[-1,-1];renderRows(true);
+  $('#flowNote').textContent=`${filtered.length.toLocaleString()} of ${MODEL.flows.length.toLocaleString()} flows`
+    +` · footprint shown at ${HZLAB[VIEW.horizon]}`;}
+$('#vscroll').addEventListener('scroll',()=>renderRows(false));
+
+/* ============================ drill-down ============================ */
+function drillCluster(id){
+  VIEW.selCluster=id; VIEW.fCluster=new Set([id]); syncClusterChips();
+  const cl=clusterOf(id); const td=tightestDim(cl,VIEW.horizon);
+  VIEW.sortKey=td; VIEW.sortDir=-1;
+  renderClusters(); renderTable();
+  $('#flowNote').textContent+=` · ranked by ${DIM_LABEL[td]} (tightest for ${id})`;
+  document.querySelector('#thead').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function drillFlow(id){
+  VIEW.selFlow=id; const f=MODEL.flows.find(x=>x.id===id); const cl=clusterOf(f.cluster);
+  const td=tightestDim(cl,VIEW.horizon); const h=VIEW.horizon;
+  const d=$('#drill'); d.className='drill show';
+  let rowsHtml, note='';
+  if(f._hasStreams){
+    const streams=[...f.streams].sort((a,b)=>b.foot[h][td]-a.foot[h][td]);
+    rowsHtml=streams.map(s=>`<div class="stream-r">
+      <div>${s.retention}</div>
+      <div class="num ${td==='hot'?'tight':''}">${fmtTB(s.foot[h].hot)}</div>
+      <div class="num ${td==='cold'?'tight':''}">${fmtTB(s.foot[h].cold)}</div>
+      <div class="num ${td==='shards'?'tight':''}">${fmtInt(s.foot[h].shards)}</div></div>`).join('');
+  }else{
+    rowsHtml=f.retentions.map(r=>`<div class="stream-r">
+      <div>${r}${/^\d+$/.test(r)?' d':''}</div>
+      <div class="num" style="color:var(--faint)">—</div>
+      <div class="num" style="color:var(--faint)">—</div>
+      <div class="num" style="color:var(--faint)">—</div></div>`).join('');
+    note=`<div class="meta" style="margin-top:9px">Per-retention footprint isn't in this export — only the flow total is available. Add a <b>streams</b> sheet (<code>flow, retention, hot_gb_end, cold_gb_end, sh_end, …</code>) and each stream's contribution shows here.</div>`;
+  }
+  d.innerHTML=`<h3>${f.id} ${f.over_budget?'<span class="chip bad">OVER BUDGET</span>':''}</h3>
+    <div class="meta">class <b>${f.cls}</b> · cluster <b style="font-family:var(--mono)">${f.cluster}</b> ·
+      ${f.retentions.length} retention stream${f.retentions.length>1?'s':''} ·
+      tightest dim for this cluster: <b style="color:${DIMC[td]()}">${DIM_LABEL[td]}</b> · footprint at ${HZLAB[h]}</div>
+    <div class="stream-h"><div>Retention stream</div>
+      <div class="num" style="${td==='hot'?'color:var(--hot)':''}">Hot</div>
+      <div class="num" style="${td==='cold'?'color:var(--cold)':''}">Cold</div>
+      <div class="num" style="${td==='shards'?'color:var(--shard)':''}">Shards</div></div>
+    ${rowsHtml}
+    <div class="stream-r" style="border-bottom:none;font-weight:700">
+      <div>flow total</div>
+      <div class="num ${td==='hot'?'tight':''}">${fmtTB(f.foot[h].hot)}</div>
+      <div class="num ${td==='cold'?'tight':''}">${fmtTB(f.foot[h].cold)}</div>
+      <div class="num ${td==='shards'?'tight':''}">${fmtInt(f.foot[h].shards)}</div></div>${note}`;
+  renderRows(true); d.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+/* ============================ wiring ============================ */
+$('#loadBtn').onclick=()=>$('#file').click();
+$('#ratio').addEventListener('input',e=>{const v=parseFloat(e.target.value);if(v>0){VIEW.ratio=v;renderAll();}});
+$('#overTog').onclick=()=>{VIEW.fOver=!VIEW.fOver;$('#overTog').classList.toggle('on',VIEW.fOver);renderTable();};
+$('#multiTog').onclick=()=>{VIEW.fMulti=!VIEW.fMulti;$('#multiTog').classList.toggle('on',VIEW.fMulti);renderTable();};
+$('#search').addEventListener('input',e=>{VIEW.q=e.target.value;renderTable();});
+$('#resetBtn').onclick=()=>{loadModel(SAMPLE_RAW());VIEW.ratio=0.5;$('#ratio').value='0.50';};
+$('#repackBtn').onclick=()=>{
+  showModalRepack();
+};
+function showModalRepack(){
+  const d=$('#drill');d.className='drill show';
+  d.innerHTML=`<h3>Re-pack (call the Python planner)</h3>
+   <div class="meta">This static page recomputes gauges against the <b>existing</b> assignment. To actually re-run the packer,
+   point it at a tiny local endpoint — then this button POSTs the edited budgets and reloads the returned assignment.</div>
+   <div style="font-family:var(--mono);font-size:11.5px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px;white-space:pre-wrap">
+# planner_server.py  —  run:  uvicorn planner_server:app --port 8000
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+app = FastAPI(); app.add_middleware(CORSMiddleware, allow_origins=["*"])
+@app.post("/repack")
+async def repack(req: Request):
+    budgets = await req.json()          # {cluster: {hot_tb, cold_tb, shard_cap, ratio}}
+    result = run_packer(budgets)        # &lt;- your existing packer
+    return result                        # same shape this page reads from Excel</div>
+   <div class="meta" style="margin-top:8px">Say the word and I'll wire the fetch + a file-less JSON path into this page.</div>`;
+  d.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+$('#vscroll').addEventListener('mouseleave',hideTip);
+window.addEventListener('resize',()=>{renderRamp();});
+
+/* ============================ load / normalize ============================ */
+function loadModel(raw){
+  MODEL=raw; recomputeUsage();
+  VIEW.selCluster=null;VIEW.selFlow=null;VIEW.fCluster=new Set();VIEW.fClass=new Set();
+  renderHorizonSeg();renderBanner();renderClusters();renderRamp();buildFilterChips();renderTable();
+  $('#drill').className='drill';
+}
+function renderAll(){renderHorizonSeg();renderBanner();renderClusters();renderRamp();renderTable();}
+
+/* Excel reader — maps the planner's workbook to MODEL.
+   Expected: sheet "clusters"(cluster,hot_tb,cold_tb,shard_cap[,ratio]);
+   sheet "flows"(flow,class,cluster,retentions,over_budget, hot_2wk,cold_2wk,shards_2wk, hot_3mo,...,hot_endgame,...);
+   optional sheet "streams"(flow,retention, hot_2wk,...). Falls back gracefully. */
+$('#file').addEventListener('change',ev=>{
+  const f=ev.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=e=>{try{
+    const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    const model=parseWorkbook(wb);
+    loadModel(model);
+    $('#status').innerHTML=`Loaded <b>${f.name}</b> · ${model.flows.length} flows · ${model.clusters.length} clusters`;
+  }catch(err){$('#status').innerHTML=`<span style="color:var(--bad)">Read failed: ${err.message}</span>`;console.error(err);}};
+  rd.readAsArrayBuffer(f);
+});
+function sheetRows(wb,name){return XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:null});}
+function findSheet(wb,pred){return wb.SheetNames.find(s=>pred(s.toLowerCase()));}
+function num(v){const n=parseFloat(v);return isFinite(n)?n:0;}
+function get(row,cands){for(const c of cands)for(const k of Object.keys(row))if(k.toLowerCase().replace(/[\s_]/g,'')===c)return row[k];return null;}
+// per-flow footprint columns (hot_gb_end / cold_gb_3mo / sh_2wk …) -> {horizon:{hot,cold,shards}}, hot/cold normalised to TB
+function parseFoot(row){
+  const f={}; HORIZONS.forEach(h=>f[h]={hot:0,cold:0,shards:0});
+  for(const key of Object.keys(row)){
+    const k=key.toLowerCase();
+    let hz = /2wk|2week|_2w/.test(k)?'2wk' : /3mo|3month|_3m/.test(k)?'3mo' : /end/.test(k)?'endgame' : null;
+    if(!hz||!f[hz])continue;
+    let dim = /(^|[^a-z])sh(ard)?s?([^a-z]|$)/.test(k)?'shards' : /hot/.test(k)?'hot' : /cold/.test(k)?'cold' : null;
+    if(!dim)continue;
+    let v=num(row[key]);
+    if(dim!=='shards' && /gb/.test(k)) v=v/1000;   // GB -> TB
+    f[hz][dim]=v;
+  }
+  return f;
+}
+// summary accessors — hot/cold in TB (convert if labelled gb), shards as count, pct columns separate
+function sHotCold(row,re){
+  for(const k of Object.keys(row)){const lk=k.toLowerCase(); if(re.test(lk)&&!/pct/.test(lk)&&/(tb|gb)/.test(lk)){let v=num(row[k]); if(/gb/.test(lk))v/=1000; return v;}}
+  for(const k of Object.keys(row)){const lk=k.toLowerCase(); if(re.test(lk)&&!/pct/.test(lk))return num(row[k]);}
+  return 0;
+}
+function sShards(row){
+  for(const k of Object.keys(row)){const lk=k.toLowerCase(); if(/shard/.test(lk)&&!/pct/.test(lk)&&!/cap/.test(lk))return num(row[k]);}
+  for(const k of Object.keys(row)){const lk=k.toLowerCase(); if(/(^|_)sh(_|$)/.test(lk)&&!/pct/.test(lk))return num(row[k]);}
+  return 0;
+}
+function sPct(row,re){for(const k of Object.keys(row)){const lk=k.toLowerCase(); if(re.test(lk)&&/pct/.test(lk))return num(row[k]);}return 0;}
+
+function parseWorkbook(wb){
+  const RATIO0=0.5;
+  // ---- flows: the assignment sheet (moved flows) ----
+  const flName = findSheet(wb,s=>s.includes('assign')) || findSheet(wb,s=>s.includes('flow')&&!s.includes('summary')) || wb.SheetNames[0];
+  const flows = sheetRows(wb,flName).map((r,i)=>{
+    const rawRet=get(r,['retentions','retention','rets']);
+    let rets=rawRet==null?[]:String(rawRet).split(/[;,|\/]/).map(s=>s.trim()).filter(Boolean);
+    const ob=get(r,['overbudget','over','overbudgetflag']);
+    return {
+      id:String(get(r,['flow','flowid','id','name'])??('flow-'+i)),
+      cls:String(get(r,['class','cls','category','type'])??'—'),
+      cluster:String(get(r,['cluster','clusterid','assigned','target'])??'?'),
+      retentions:rets.length?rets:['—'], multi:rets.length>1,
+      over_budget: ob===true||ob===1||String(ob).toLowerCase()==='true'||String(ob)==='1',
+      _obExplicit: ob!=null,
+      foot:parseFoot(r), streams:[], _hasStreams:false
+    };
+  });
+  // ---- summaries: per-cluster usage per horizon + back-computed budgets ----
+  const usage={}, order=[], endRow={};
+  const hzOf=n=>{const s=n.toLowerCase(); return /2w|2week/.test(s)?'2wk': /3m|3month/.test(s)?'3mo': /end/.test(s)?'endgame':null;};
+  for(const sn of wb.SheetNames.filter(s=>s.toLowerCase().includes('summary'))){
+    const hz=hzOf(sn); if(!hz)continue;
+    for(const r of sheetRows(wb,sn)){
+      const id=String(get(r,['cluster','clusterid','name'])??'').trim();
+      if(!id||id==='None'||id==='?')continue;
+      if(!usage[id]){usage[id]={'2wk':{hot:0,cold:0,shards:0},'3mo':{hot:0,cold:0,shards:0},'endgame':{hot:0,cold:0,shards:0}}; order.push(id);}
+      usage[id][hz]={hot:sHotCold(r,/hot/), cold:sHotCold(r,/cold/), shards:sShards(r)};
+      if(hz==='endgame')endRow[id]=r;
+    }
+  }
+  let clusters;
+  if(order.length){
+    clusters=order.map(id=>{
+      const r=endRow[id]||{};
+      const hu=sHotCold(r,/hot/), cu=sHotCold(r,/cold/), su=sShards(r);
+      const hp=sPct(r,/hot/), cp=sPct(r,/cold/), sp=sPct(r,/shard|(^|_)sh(_|$)/);
+      const limHot = hp>0? hu/(hp/100) : (hu>0?hu:1);      // "budget" = usage / pct-of-budget
+      const limCold = cp>0? cu/(cp/100) : (cu>0?cu:1);
+      const shardCap = sp>0? Math.round(su/(sp/100)/1000)*1000 : (su>0?Math.max(1000,Math.round(su/1000)*1000):100000);
+      return {id, hot_tb:+(limHot/RATIO0).toFixed(1), cold_tb:+(limCold/RATIO0).toFixed(1), shard_cap:shardCap||100000, ratio:null};
+    });
+  }else{
+    // no summary sheets -> derive from flow sums, target ~60% at endgame
+    const ids=[...new Set(flows.map(f=>f.cluster))]; clusters=[];
+    ids.forEach(id=>usage[id]={'2wk':{hot:0,cold:0,shards:0},'3mo':{hot:0,cold:0,shards:0},'endgame':{hot:0,cold:0,shards:0}});
+    flows.forEach(f=>{const u=usage[f.cluster]; if(!u)return; for(const h of HORIZONS){u[h].hot+=f.foot[h].hot;u[h].cold+=f.foot[h].cold;u[h].shards+=f.foot[h].shards;}});
+    ids.forEach(id=>{const e=usage[id].endgame; clusters.push({id,
+      hot_tb:+(((e.hot/0.6)||1)/RATIO0).toFixed(1), cold_tb:+(((e.cold/0.6)||1)/RATIO0).toFixed(1),
+      shard_cap:Math.max(1000,Math.round((e.shards/0.6)/1000)*1000)||100000, ratio:null});});
+  }
+  // ---- optional streams sheet (per-flow, per-retention) enables true drill-down ----
+  const stName=findSheet(wb,s=>s.includes('stream'));
+  if(stName){const byId=new Map(flows.map(f=>[f.id,f]));
+    for(const r of sheetRows(wb,stName)){const f=byId.get(String(get(r,['flow','flowid','id'])));
+      if(!f)continue; f.streams.push({retention:String(get(r,['retention','ret'])??'—'),foot:parseFoot(r)}); f._hasStreams=true;}}
+  for(const f of flows)if(!f.streams.length)f.streams=[{retention:f.retentions.join(','),foot:f.foot}];
+  // ---- derive over_budget when the export has no such column ----
+  if(!flows.some(f=>f._obExplicit)){
+    for(const cl of clusters){
+      const lim={hot:0.5*cl.hot_tb, cold:0.5*cl.cold_tb, shards:cl.shard_cap};
+      const u=usage[cl.id]&&usage[cl.id].endgame; if(!u)continue;
+      const ut={hot:lim.hot?u.hot/lim.hot:0, cold:lim.cold?u.cold/lim.cold:0, shards:lim.shards?u.shards/lim.shards:0};
+      let td='hot',bu=0; for(const d of DIMS)if(ut[d]>bu){bu=ut[d];td=d;}
+      if(bu<=1)continue;
+      const mine=flows.filter(f=>f.cluster===cl.id).sort((a,b)=>b.foot.endgame[td]-a.foot.endgame[td]);
+      const total=u[td]||1, excess=1-1/bu; let acc=0;
+      for(const f of mine){f.over_budget=true; acc+=f.foot.endgame[td]; if(acc/total>=excess+0.05)break;}
+    }
+  }
+  return {clusters, flows, usage};
+}
+
+/* ============================ synthetic data ============================ */
+function mulberry32(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function SAMPLE_RAW(){
+  const rnd=mulberry32(7);
+  const rint=(a,b)=>a+Math.floor(rnd()*(b-a+1)); const rf=(a,b)=>a+rnd()*(b-a); const pickw=(w)=>{let r=rnd(),a=0;for(let i=0;i<w.length;i++){a+=w[i];if(r<=a)return i;}return w.length-1;};
+  // class → {home cluster, gb/day scale, hot window days, shardiness, retention pool}
+  const CLASSES={
+    dns:     {home:'core-logs-02', gb:220, shardy:1.0, pool:[[30,.4],[90,.4],[365,.2]]},
+    proxy:   {home:'core-logs-02', gb:150, shardy:1.1, pool:[[30,.5],[90,.4],[365,.1]]},
+    netflow: {home:'netops-05',    gb:420, shardy:1.3, pool:[[90,.4],[365,.6]]},
+    firewall:{home:'hot-edge-01',  gb:120, shardy:1.0, pool:[[7,.4],[30,.5],[90,.1]]},
+    dhcp:    {home:'hot-edge-01',  gb:60,  shardy:0.9, pool:[[7,.5],[30,.5]]},
+    edr:     {home:'security-04',  gb:24,  shardy:5.5, pool:[[30,.4],[90,.4],[365,.2]]}, // cheap disk, heavy shards
+    audit:   {home:'archive-03',   gb:70,  shardy:2.4, pool:[[365,.8],[90,.2]]},          // long retention → cold late
+    edge_dns:{home:'archive-03',   gb:180, shardy:1.2, pool:[[365,.6],[90,.4]]},
+  };
+  const clusterIds=['hot-edge-01','core-logs-02','archive-03','security-04','netops-05'];
+  const classNames=Object.keys(CLASSES); const classW=[.16,.16,.14,.12,.08,.14,.1,.1];
+  const N=3000, flows=[];
+  for(let i=0;i<N;i++){
+    const cls=classNames[pickw(classW)]; const C=CLASSES[cls];
+    const nret=C.pool.length===1?1:rint(1,Math.min(3,C.pool.length));
+    const rets=[]; const used=new Set();
+    for(let k=0;k<nret;k++){let idx=pickw(C.pool.map(p=>p[1]));let tries=0;while(used.has(idx)&&tries++<5)idx=pickw(C.pool.map(p=>p[1]));used.add(idx);rets.push(C.pool[idx][0]);}
+    rets.sort((a,b)=>a-b);
+    const vday=C.gb*rf(.5,1.6)/15; // gb/day for this flow (scaled to believable hot-tier magnitudes)
+    const streams=rets.map(R=>{
+      const hotDays=Math.min(R,21);
+      const hotFull=vday*hotDays/1000, coldFull=vday*R/1000;
+      const idxCount=Math.ceil(R/7); // weekly indices
+      const shardsFull=idxCount*C.shardy*rf(.7,1.4);
+      const foot={};
+      for(const h of HORIZONS){
+        const elapsed = h==='2wk'?14: h==='3mo'?90: R; // endgame = fully saturated
+        const coldFill=Math.min(1,elapsed/R), hotFill=Math.min(1,elapsed/hotDays);
+        foot[h]={hot:hotFull*hotFill, cold:coldFull*coldFill, shards:shardsFull*coldFill};
+      }
+      return {retention:R+'d',foot};
+    });
+    const foot={}; for(const h of HORIZONS)foot[h]={hot:0,cold:0,shards:0};
+    streams.forEach(s=>HORIZONS.forEach(h=>{foot[h].hot+=s.foot[h].hot;foot[h].cold+=s.foot[h].cold;foot[h].shards+=s.foot[h].shards;}));
+    flows.push({id:`${cls}-${String(i).padStart(4,'0')}`,cls,cluster:C.home,
+      retentions:rets.map(r=>r+'d'),multi:rets.length>1,over_budget:false,foot,streams,_hasStreams:true});
+  }
+  // targets per cluster/dim → set caps & scale shards so intended breaches occur at endgame
+  const targets={
+    'hot-edge-01':{hot:.74,cold:.66,shards:.5},
+    'core-logs-02':{hot:.7,cold:.72,shards:.58},
+    'archive-03':{hot:.6,cold:1.14,shards:.66},   // cold time-bomb
+    'security-04':{hot:.68,cold:.7,shards:1.2},    // shard breach
+    'netops-05':{hot:.72,cold:.8,shards:.62},
+  };
+  const clusters=[];
+  clusterIds.forEach(id=>{
+    const mine=flows.filter(f=>f.cluster===id);
+    const endUse=d=>mine.reduce((s,f)=>s+f.foot.endgame[d],0);
+    const t=targets[id];
+    // shards: fixed cap 100000, scale flow shards to hit t.shards*100000 at endgame
+    const shard_cap=100000; const curShards=endUse('shards')||1; const sScale=t.shards*shard_cap/curShards;
+    mine.forEach(f=>{HORIZONS.forEach(h=>{f.foot[h].shards*=sScale;});f.streams.forEach(s=>HORIZONS.forEach(h=>s.foot[h].shards*=sScale));});
+    // hot/cold caps from usage & target with ratio 0.5:  limit=0.5*cap ; util=use/limit=t  -> cap=use/(0.5*t)
+    const hot_tb=+(endUse('hot')/(0.5*t.hot)).toFixed(1);
+    const cold_tb=+(endUse('cold')/(0.5*t.cold)).toFixed(0);
+    clusters.push({id,hot_tb,cold_tb,shard_cap,ratio:null});
+  });
+  // over_budget: flows in a cluster that breaches at endgame, and are top contributors to that tightest dim
+  const tmpUsage={}; clusters.forEach(cl=>{tmpUsage[cl.id]={hot:0,cold:0,shards:0};});
+  flows.forEach(f=>{const u=tmpUsage[f.cluster];u.hot+=f.foot.endgame.hot;u.cold+=f.foot.endgame.cold;u.shards+=f.foot.endgame.shards;});
+  clusters.forEach(cl=>{
+    const lim={hot:.5*cl.hot_tb,cold:.5*cl.cold_tb,shards:cl.shard_cap};
+    const utils={hot:tmpUsage[cl.id].hot/lim.hot,cold:tmpUsage[cl.id].cold/lim.cold,shards:tmpUsage[cl.id].shards/lim.shards};
+    let td='hot',bu=0;for(const d of DIMS)if(utils[d]>bu){bu=utils[d];td=d;}
+    if(bu<=1)return; // not over → nothing flagged
+    const mine=flows.filter(f=>f.cluster===cl.id).sort((a,b)=>b.foot.endgame[td]-a.foot.endgame[td]);
+    // flag enough top contributors to represent the overflow (~the excess share)
+    const excess=1-1/bu; // fraction over
+    let acc=0; const total=tmpUsage[cl.id][td];
+    for(const f of mine){f.over_budget=true;acc+=f.foot.endgame[td];if(acc/total>=excess+0.05)break;}
+  });
+  return {clusters,flows};
+}
+
+/* schema footer */
+$('#schemaFoot').innerHTML=`<b>Matched to your planner export.</b> The loader reads:
+  <code>flow_assignments</code> → <code>flow, class, retentions, cluster, hot_gb_end, cold_gb_end, sh_end, …_3mo, …_2wk</code> (GB → shown as GB/TB);
+  <code>summary_2weeks / summary_3months / summary_endgame</code> → <code>cluster, hot_tb, hot_pct_of_budget, cold_tb, cold_pct_of_budget, shards, shard_pct_of_cap</code>
+  — each cluster's <b>budget</b> is back-computed as usage ÷ pct (hot/cold budget = the 50% target; shard cap ≈ shards ÷ shard_pct ≈ 100k).
+  <code>kept_on_source</code> (major flows that stay put) is <b>excluded</b> from the distribution view.
+  <b>over_budget</b> is <b>derived</b> (cluster over its limit at endgame + top contributor on the tightest dim) because the export has no such column — add one and it's honored verbatim.
+  Per-retention drill-down needs an optional <code>streams</code> sheet (<code>flow, retention, hot_gb_end, …</code>).`;
+
+/* boot */
+loadModel(SAMPLE_RAW());
+$('#overTog').classList.remove('on');
+</script>
+</body>
+</html>
