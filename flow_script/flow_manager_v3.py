@@ -63,6 +63,45 @@ def parse(name):
     ret, date = p[2].split("_", 1)
     return p[1], int(ret), date
 
+def bucket_start_ms(date_str):
+    """Epoch ms for the start of the bucket encoded in the index name's date.
+    2026.09 -> month start; 2026.09.01 -> that day; 2026.09.w3 -> month start + 2 weeks."""
+    import datetime as dt
+    parts = date_str.split(".")
+    y, mo = int(parts[0]), int(parts[1])
+    base = dt.datetime(y, mo, 1, tzinfo=dt.timezone.utc)
+    if len(parts) == 3:
+        tail = parts[2]
+        if tail.lower().startswith("w"):
+            base += dt.timedelta(weeks=int(tail[1:]) - 1)     # weekly
+        else:
+            base = dt.datetime(y, mo, int(tail), tzinfo=dt.timezone.utc)  # daily
+    return int(base.timestamp() * 1000)
+
+def read_indices(es):
+    """Real per-index records straight from _cat/indices: actual shards, actual
+    size, and a deletion date. Deletion = creation + retention (what the ILM
+    script keys on); we use the real creation.date when present, else the bucket
+    date from the name. This is the ground truth the source drain is measured on."""
+    idx = es.cat.indices(format="json", bytes="b", h="index,pri,rep,store.size,creation.date")
+    recs = []
+    for i in idx:
+        name = i.get("index")
+        if not name: continue
+        try: code, R, date = parse(name)
+        except: continue
+        if R not in PERIOD:
+            print(f"WARNING: unknown retention {R} in {name}"); continue
+        creation = int(i.get("creation.date") or 0) or bucket_start_ms(date)
+        recs.append({
+            "name": name, "code": code, "R": R, "date": date,
+            "shards": int(i.get("pri") or 0) * (1 + int(i.get("rep") or 0)),
+            "gb": int(i.get("store.size") or 0) / (1024**3),
+            "creation_ms": creation,
+            "deletion_ms": creation + R * 86400_000,   # aged out R days after creation
+        })
+    return recs
+
 def footprint(full_gb, bucket_sh, R, period, T):
     """One retention-stream's state at T days after redirection (fills from empty)."""
     live = math.ceil(min(T, R) / period)      # buckets present at time T
@@ -70,19 +109,13 @@ def footprint(full_gb, bucket_sh, R, period, T):
     cold_gb = (live - 1) * full_gb
     return hot_gb, cold_gb, live * bucket_sh, live
 
-def collect(es):
-    idx = es.cat.indices(format="json", bytes="b", h="index,pri,rep,store.size")
+def collect(recs):
+    """Per-flow FORWARD projections used for placement and the (empty) new-cluster
+    summaries. Takes the real records from read_indices(). These are projections by
+    necessity: the new clusters don't hold this data yet."""
     streams = defaultdict(list)                # (code, R) -> [(date, shards, gb)]
-    for i in idx:
-        name = i.get("index")
-        if not name: continue
-        try: code, R, date = parse(name)
-        except: continue
-        if R not in PERIOD:                    # retention not in the schema -> flag, don't guess
-            print(f"WARNING: unknown retention {R} in {name}"); continue
-        sh = int(i.get("pri") or 0) * (1 + int(i.get("rep") or 0))
-        gb = int(i.get("store.size") or 0) / (1024**3)
-        streams[(code, R)].append((date, sh, gb))
+    for r in recs:
+        streams[(r["code"], r["R"])].append((r["date"], r["shards"], r["gb"]))
 
     # accumulate every retention-stream up to its flow, so a flow moves as one unit
     flows = defaultdict(lambda: {"R": set(),
@@ -175,45 +208,44 @@ SHOW_COLS = ["flow","class","retentions","cluster"] + list(DISPLAY)
 KEPT_DISPLAY = {"hot_gb": "hot_gb", "cold_gb": "cold_gb", "sh": "shards"}
 KEPT_COLS = ["flow","class","retentions","cluster","hot_gb","cold_gb","sh"]
 
-def source_evolution(df):
-    """How the SOURCE cluster drains over time after the one-shot redirect.
+def source_evolution(recs, df, now_ms=None):
+    """How the SOURCE cluster evolves after the one-shot redirect — MEASURED from
+    the real indices, not modeled.
 
-    Redirection diverts only new ingest; the medium/small data already on source
-    ages out over its retention while nothing new is written there. So per flow
-    the source residual = full footprint - what the new cluster has filled by T
-    (columns we already have). Major/big stay put and are already saturated, so
-    they're constant. Residual is frozen (no longer written) -> counted as cold;
-    source hot = major/big only. Result is a time series (one row per horizon)."""
-    mb = df[df["class"].isin(["major","big"])]      # stay on source, constant
-    sm = df[df["class"].isin(["medium","small"])]   # drain off source
+    Each real index has an actual shard count, size, and deletion date
+    (creation + retention). medium/small flows are redirected, so no new indices
+    are written for them on source: the indices that exist today are their entire
+    remaining life there, and they simply age out -> pure measured drain. major/big
+    stay and keep ingesting, so what ages out is replaced; we hold their measured
+    current total flat (steady state) rather than pretend they drain. 'kept' =
+    major/big floor, 'draining' = medium/small still alive at each horizon."""
+    import time
+    now_ms = now_ms if now_ms is not None else int(time.time()*1000)
+    day = 86400_000
+    cls = dict(zip(df["flow"], df["class"]))
 
-    mb_hot, mb_cold, mb_sh = mb["hot_gb"].sum(), mb["cold_gb"].sum(), int(mb["sh"].sum())
+    keep = [r for r in recs if cls.get(r["code"]) in ("major","big")]
+    move = [r for r in recs if cls.get(r["code"]) in ("medium","small")]
+    keep_sh = sum(r["shards"] for r in keep)          # held flat (measured)
+    keep_gb = sum(r["gb"]     for r in keep)
 
-    def resid(fh, fc, fs):                           # residual = full - fill(T), clamped >=0
-        gb = ((sm["hot_gb"]+sm["cold_gb"]) - (sm[fh]+sm[fc])).clip(lower=0).sum()
-        sh = (sm["sh"] - sm[fs]).clip(lower=0).sum()
-        return gb, int(sh)
+    def alive(T):                                     # real indices not yet deleted at now+T
+        cut = now_ms + T*day
+        surv = move if T == 0 else [r for r in move if r["deletion_ms"] > cut]
+        return sum(r["shards"] for r in surv), sum(r["gb"] for r in surv)
 
-    g14, s14 = resid("early_hot_gb", "early_cold_gb", "early_sh")
-    g30, s30 = resid("month_hot_gb", "month_cold_gb", "month_sh")
-    g92, s92 = resid("ramp_hot_gb",  "ramp_cold_gb",  "ramp_sh")
-    rows = [
-        # at redirect (T=0): everything still on source at full = current cluster state
-        ("at_redirect", 0,      mb["hot_gb"].sum()+sm["hot_gb"].sum(),
-                                 mb["cold_gb"].sum()+sm["cold_gb"].sum(), int(df["sh"].sum())),
-        ("2weeks",  EARLY_T,    mb_hot, mb_cold+g14, mb_sh+s14),
-        ("1month",  MONTH_T,    mb_hot, mb_cold+g30, mb_sh+s30),
-        ("3months", RAMP_T,     mb_hot, mb_cold+g92, mb_sh+s92),
-    ]
-    out = pd.DataFrame(rows, columns=["horizon","days","hot_gb","cold_gb","shards"])
-    out["hot_tb"]   = (out["hot_gb"]/1024).round(2)
-    out["cold_tb"]  = (out["cold_gb"]/1024).round(2)
-    out["total_tb"] = ((out["hot_gb"]+out["cold_gb"])/1024).round(2)
-    return out[["horizon","days","hot_tb","cold_tb","total_tb","shards"]]
+    rows = []
+    for label, T in [("at_redirect",0),("2weeks",EARLY_T),("1month",MONTH_T),("3months",RAMP_T)]:
+        dsh, dgb = alive(T)
+        rows.append({"horizon": label, "days": T,
+            "kept_tb": round(keep_gb/1024,2), "kept_shards": int(keep_sh),
+            "draining_tb": round(dgb/1024,2), "draining_shards": int(dsh),
+            "total_tb": round((keep_gb+dgb)/1024,2), "total_shards": int(keep_sh+dsh)})
+    return pd.DataFrame(rows)
 
-def build_tables(plan, df):
+def build_tables(plan, df, recs):
     """Assemble the same tables both exporters use: assignments, per-horizon
-    summaries, and the kept-on-source list — as pandas DataFrames."""
+    summaries, kept-on-source, and the MEASURED source drain — as DataFrames."""
     ordered = plan.sort_values(["cluster","gb"], ascending=[True,False])
     assignments = ordered[SHOW_COLS].rename(columns=DISPLAY)
     kept = df[df["class"].isin(["major","big"])].assign(cluster="source")
@@ -224,19 +256,19 @@ def build_tables(plan, df):
         "summary_1month":   summary(plan, "month_hot_gb", "month_cold_gb", "month_sh"),
         "summary_3months":  summary(plan, "ramp_hot_gb", "ramp_cold_gb", "ramp_sh"),
         "kept_on_source":   kept,
-        "source_evolution": source_evolution(df),
+        "source_evolution": source_evolution(recs, df),
     }
 
-def export_xlsx(plan, df, path="distribution_plan.xlsx"):
-    t = build_tables(plan, df)
+def export_xlsx(plan, df, recs, path="distribution_plan.xlsx"):
+    t = build_tables(plan, df, recs)
     with pd.ExcelWriter(path) as w:
         for sheet in ("flow_assignments","summary_2weeks","summary_1month","summary_3months","source_evolution","kept_on_source"):
             t[sheet].to_excel(w, sheet_name=sheet, index=False)
     return path
 
-def export_json(plan, df, path="distribution_plan.json"):
+def export_json(plan, df, recs, path="distribution_plan.json"):
     import json
-    t = build_tables(plan, df)
+    t = build_tables(plan, df, recs)
     # cluster config echoed so the frontend has the budgets/caps without a second file
     clusters = {n: {"hot_gb": c["hot_gb"], "cold_gb": c["cold_gb"],
                     "sh_budget": c["sh_budget"], "sh_cap": c["sh_cap"]}
@@ -251,18 +283,19 @@ def export_json(plan, df, path="distribution_plan.json"):
         json.dump(doc, f, indent=2)
     return path
 
-def export(plan, df, path=None, fmt="xlsx"):
+def export(plan, df, recs, path=None, fmt="xlsx"):
     """fmt = 'xlsx', 'json', or 'both'."""
     if fmt == "json":
-        return export_json(plan, df, path or "distribution_plan.json")
+        return export_json(plan, df, recs, path or "distribution_plan.json")
     if fmt == "both":
-        return [export_xlsx(plan, df), export_json(plan, df)]
-    return export_xlsx(plan, df, path or "distribution_plan.xlsx")
+        return [export_xlsx(plan, df, recs), export_json(plan, df, recs)]
+    return export_xlsx(plan, df, recs, path or "distribution_plan.xlsx")
 
 if __name__ == "__main__":
     import sys
     fmt = sys.argv[1] if len(sys.argv) > 1 else "xlsx"   # xlsx | json | both
     es = Elasticsearch("http://localhost:9200")
-    df = collect(es)
+    recs = read_indices(es)      # real per-index records (ground truth for the drain)
+    df = collect(recs)           # per-flow projections (placement + new-cluster fill)
     plan, used = distribute(df)
-    print(export(plan, df, fmt=fmt))
+    print(export(plan, df, recs, fmt=fmt))
