@@ -61,7 +61,7 @@ def parse(name):
 
 def footprint(full_gb, bucket_sh, R, period, T):
     """One retention-stream's state at T days after redirection (fills from empty)."""
-    live = math.ceil(min(T, R) / period)      # buckets present at time T. A bucket is how many batch of indices will be created during that period
+    live = math.ceil(min(T, R) / period)      # buckets present at time T
     hot_gb  = full_gb                         # current bucket = one, per stream
     cold_gb = (live - 1) * full_gb
     return hot_gb, cold_gb, live * bucket_sh, live
@@ -161,6 +161,41 @@ DISPLAY = {
 }
 SHOW_COLS = ["flow","class","retentions","cluster"] + list(DISPLAY)
 
+def source_evolution(df):
+    """How the SOURCE cluster drains over time after the one-shot redirect.
+
+    Redirection diverts only new ingest; the medium/small data already on source
+    ages out over its retention while nothing new is written there. So per flow
+    the source residual = full footprint - what the new cluster has filled by T
+    (columns we already have). Major/big stay put and are already saturated, so
+    they're constant. Residual is frozen (no longer written) -> counted as cold;
+    source hot = major/big only. Result is a time series (one row per horizon)."""
+    mb = df[df["class"].isin(["major","big"])]      # stay on source, constant
+    sm = df[df["class"].isin(["medium","small"])]   # drain off source
+
+    mb_hot, mb_cold, mb_sh = mb["hot_gb"].sum(), mb["cold_gb"].sum(), int(mb["sh"].sum())
+
+    def resid(fh, fc, fs):                           # residual = full - fill(T), clamped >=0
+        gb = ((sm["hot_gb"]+sm["cold_gb"]) - (sm[fh]+sm[fc])).clip(lower=0).sum()
+        sh = (sm["sh"] - sm[fs]).clip(lower=0).sum()
+        return gb, int(sh)
+
+    g14, s14 = resid("early_hot_gb", "early_cold_gb", "early_sh")
+    g92, s92 = resid("ramp_hot_gb",  "ramp_cold_gb",  "ramp_sh")
+    rows = [
+        # at redirect (T=0): everything still on source at full = current cluster state
+        ("at_redirect", 0,      mb["hot_gb"].sum()+sm["hot_gb"].sum(),
+                                 mb["cold_gb"].sum()+sm["cold_gb"].sum(), int(df["sh"].sum())),
+        ("2weeks",  EARLY_T,    mb_hot, mb_cold+g14, mb_sh+s14),
+        ("3months", RAMP_T,     mb_hot, mb_cold+g92, mb_sh+s92),
+        ("endgame", PLACE_T,    mb_hot, mb_cold,      mb_sh),   # medium/small fully drained
+    ]
+    out = pd.DataFrame(rows, columns=["horizon","days","hot_gb","cold_gb","shards"])
+    out["hot_tb"]   = (out["hot_gb"]/1024).round(2)
+    out["cold_tb"]  = (out["cold_gb"]/1024).round(2)
+    out["total_tb"] = ((out["hot_gb"]+out["cold_gb"])/1024).round(2)
+    return out[["horizon","days","hot_tb","cold_tb","total_tb","shards"]]
+
 def build_tables(plan, df):
     """Assemble the same tables both exporters use: assignments, per-horizon
     summaries, and the kept-on-source list — as pandas DataFrames."""
@@ -174,12 +209,13 @@ def build_tables(plan, df):
         "summary_3months":  summary(plan, "ramp_hot_gb", "ramp_cold_gb", "ramp_sh"),
         "summary_2weeks":   summary(plan, "early_hot_gb", "early_cold_gb", "early_sh"),
         "kept_on_source":   kept,
+        "source_evolution": source_evolution(df),
     }
 
 def export_xlsx(plan, df, path="distribution_plan.xlsx"):
     t = build_tables(plan, df)
     with pd.ExcelWriter(path) as w:
-        for sheet in ("flow_assignments","summary_endgame","summary_2weeks","summary_3months","kept_on_source"):
+        for sheet in ("flow_assignments","summary_endgame","summary_2weeks","summary_3months","source_evolution","kept_on_source"):
             t[sheet].to_excel(w, sheet_name=sheet, index=False)
     return path
 
