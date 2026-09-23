@@ -19,9 +19,9 @@ Model summary
   so hot+cold shards count against one shard budget per cluster.
 - Clusters start empty and fill from redirection. State at T days after the
   one-shot redirect: each stream holds min(T, retention)/period buckets.
-    * PLACEMENT is decided at T=1096 (full saturation / endgame) so balance and
-      the <50% / <100k guarantees hold once the clusters are full.
-    * A T=92 ramp snapshot is reported alongside (3 months after redirection).
+    * PLACEMENT is decided on the fully-saturated size (SAT_T, computed but not
+      reported) so a long-retention flow can't overflow a cluster months later.
+    * Reported horizons are the ramp view: 2 weeks, 1 month, 3 months.
 - Placement: greedy, biggest-demand-first, each flow to the cluster that keeps
   its most-stressed dimension (hot / cold / shards) lowest.
 """
@@ -30,9 +30,13 @@ from elasticsearch import Elasticsearch
 import pandas as pd, math
 from collections import defaultdict
 
-PLACE_T = 1096   # saturation horizon for PLACEMENT (endgame balance)
-RAMP_T  = 92     # snapshot horizon reported alongside (state 3 months after redirection)
-EARLY_T = 14     # early snapshot (2 weeks after redirection: hot/shard load before cold fills)
+# horizons in days, measured from the one-shot redirect. SAT_T is the saturated
+# size used only as the PLACEMENT basis and the source-drain baseline (not shown).
+# The three reported horizons are the ramp view.
+SAT_T   = 1096   # fully saturated (placement basis + source baseline) — not reported
+EARLY_T = 14     # 2 weeks
+MONTH_T = 30     # 1 month
+RAMP_T  = 92     # 3 months
 
 # disk budgets = 50% of each pool; shards = one cluster-wide budget
 CLUSTERS = {
@@ -84,6 +88,7 @@ def collect(es):
     flows = defaultdict(lambda: {"R": set(),
         "hot_gb":0.0,"cold_gb":0.0,"sh":0,"live":0,
         "r_hot":0.0,"r_cold":0.0,"r_sh":0,"r_live":0,
+        "mo_hot":0.0,"mo_cold":0.0,"mo_sh":0,"mo_live":0,
         "e_hot":0.0,"e_cold":0.0,"e_sh":0,"e_live":0})
 
     for (code, R), items in streams.items():
@@ -93,13 +98,15 @@ def collect(es):
         full_gb   = sum(g for _,_,g in completed) / len(completed)
         bucket_sh = round(sum(s for _,s,_ in completed) / len(completed))
 
-        p_hot, p_cold, p_sh, p_live = footprint(full_gb, bucket_sh, R, period, PLACE_T)  # endgame
+        p_hot, p_cold, p_sh, p_live = footprint(full_gb, bucket_sh, R, period, SAT_T)    # saturated
         r_hot, r_cold, r_sh, r_live = footprint(full_gb, bucket_sh, R, period, RAMP_T)   # 3 months
+        o_hot, o_cold, o_sh, o_live = footprint(full_gb, bucket_sh, R, period, MONTH_T)  # 1 month
         e_hot, e_cold, e_sh, e_live = footprint(full_gb, bucket_sh, R, period, EARLY_T)  # 2 weeks
 
         f = flows[code]; f["R"].add(R)
         f["hot_gb"]+=p_hot; f["cold_gb"]+=p_cold; f["sh"]+=p_sh; f["live"]+=p_live
         f["r_hot"]+=r_hot;  f["r_cold"]+=r_cold;  f["r_sh"]+=r_sh; f["r_live"]+=r_live
+        f["mo_hot"]+=o_hot; f["mo_cold"]+=o_cold; f["mo_sh"]+=o_sh; f["mo_live"]+=o_live
         f["e_hot"]+=e_hot;  f["e_cold"]+=e_cold;  f["e_sh"]+=e_sh; f["e_live"]+=e_live
 
     rows = []
@@ -113,6 +120,8 @@ def collect(es):
             "gb": round(gb,1), "sh": f["sh"], "live": f["live"],
             "ramp_hot_gb": round(f["r_hot"],1), "ramp_cold_gb": round(f["r_cold"],1),
             "ramp_gb": round(f["r_hot"]+f["r_cold"],1), "ramp_sh": f["r_sh"], "ramp_live": f["r_live"],
+            "month_hot_gb": round(f["mo_hot"],1), "month_cold_gb": round(f["mo_cold"],1),
+            "month_gb": round(f["mo_hot"]+f["mo_cold"],1), "month_sh": f["mo_sh"], "month_live": f["mo_live"],
             "early_hot_gb": round(f["e_hot"],1), "early_cold_gb": round(f["e_cold"],1),
             "early_gb": round(f["e_hot"]+f["e_cold"],1), "early_sh": f["e_sh"], "early_live": f["e_live"],
         })
@@ -151,15 +160,20 @@ def summary(plan, hot_key, cold_key, sh_key):
             "shards": sh, "shard_pct_of_cap": round(100*sh/c["sh_cap"],1)})
     return pd.DataFrame(rows)
 
-# internal footprint keys -> clear per-horizon display names (_end = saturated,
-# _3mo = 3 months after redirect, _2wk = 2 weeks after). hot+cold totals, live
-# bucket count, and over_budget are intentionally not shown.
+# internal footprint keys -> clear per-horizon display names for MOVED flows.
+# Reported horizons are the ramp view: 2 weeks / 1 month / 3 months. The saturated
+# size (placement basis) and hot+cold totals / live counts are intentionally not shown.
 DISPLAY = {
-    "hot_gb": "hot_gb_end",  "cold_gb": "cold_gb_end",  "sh": "sh_end",
-    "ramp_hot_gb": "hot_gb_3mo",  "ramp_cold_gb": "cold_gb_3mo",  "ramp_sh": "sh_3mo",
     "early_hot_gb": "hot_gb_2wk", "early_cold_gb": "cold_gb_2wk", "early_sh": "sh_2wk",
+    "month_hot_gb": "hot_gb_1mo", "month_cold_gb": "cold_gb_1mo", "month_sh": "sh_1mo",
+    "ramp_hot_gb":  "hot_gb_3mo", "ramp_cold_gb":  "cold_gb_3mo", "ramp_sh":  "sh_3mo",
 }
 SHOW_COLS = ["flow","class","retentions","cluster"] + list(DISPLAY)
+
+# kept flows are already saturated on the running source cluster, so they get one
+# steady footprint (not a ramp): their saturated hot/cold/shards under plain names.
+KEPT_DISPLAY = {"hot_gb": "hot_gb", "cold_gb": "cold_gb", "sh": "shards"}
+KEPT_COLS = ["flow","class","retentions","cluster","hot_gb","cold_gb","sh"]
 
 def source_evolution(df):
     """How the SOURCE cluster drains over time after the one-shot redirect.
@@ -181,14 +195,15 @@ def source_evolution(df):
         return gb, int(sh)
 
     g14, s14 = resid("early_hot_gb", "early_cold_gb", "early_sh")
+    g30, s30 = resid("month_hot_gb", "month_cold_gb", "month_sh")
     g92, s92 = resid("ramp_hot_gb",  "ramp_cold_gb",  "ramp_sh")
     rows = [
         # at redirect (T=0): everything still on source at full = current cluster state
         ("at_redirect", 0,      mb["hot_gb"].sum()+sm["hot_gb"].sum(),
                                  mb["cold_gb"].sum()+sm["cold_gb"].sum(), int(df["sh"].sum())),
         ("2weeks",  EARLY_T,    mb_hot, mb_cold+g14, mb_sh+s14),
+        ("1month",  MONTH_T,    mb_hot, mb_cold+g30, mb_sh+s30),
         ("3months", RAMP_T,     mb_hot, mb_cold+g92, mb_sh+s92),
-        ("endgame", PLACE_T,    mb_hot, mb_cold,      mb_sh),   # medium/small fully drained
     ]
     out = pd.DataFrame(rows, columns=["horizon","days","hot_gb","cold_gb","shards"])
     out["hot_tb"]   = (out["hot_gb"]/1024).round(2)
@@ -202,12 +217,12 @@ def build_tables(plan, df):
     ordered = plan.sort_values(["cluster","gb"], ascending=[True,False])
     assignments = ordered[SHOW_COLS].rename(columns=DISPLAY)
     kept = df[df["class"].isin(["major","big"])].assign(cluster="source")
-    kept = kept.sort_values("gb", ascending=False)[SHOW_COLS].rename(columns=DISPLAY)
+    kept = kept.sort_values("gb", ascending=False)[KEPT_COLS].rename(columns=KEPT_DISPLAY)
     return {
         "flow_assignments": assignments,
-        "summary_endgame":  summary(plan, "hot_gb", "cold_gb", "sh"),
-        "summary_3months":  summary(plan, "ramp_hot_gb", "ramp_cold_gb", "ramp_sh"),
         "summary_2weeks":   summary(plan, "early_hot_gb", "early_cold_gb", "early_sh"),
+        "summary_1month":   summary(plan, "month_hot_gb", "month_cold_gb", "month_sh"),
+        "summary_3months":  summary(plan, "ramp_hot_gb", "ramp_cold_gb", "ramp_sh"),
         "kept_on_source":   kept,
         "source_evolution": source_evolution(df),
     }
@@ -215,7 +230,7 @@ def build_tables(plan, df):
 def export_xlsx(plan, df, path="distribution_plan.xlsx"):
     t = build_tables(plan, df)
     with pd.ExcelWriter(path) as w:
-        for sheet in ("flow_assignments","summary_endgame","summary_2weeks","summary_3months","source_evolution","kept_on_source"):
+        for sheet in ("flow_assignments","summary_2weeks","summary_1month","summary_3months","source_evolution","kept_on_source"):
             t[sheet].to_excel(w, sheet_name=sheet, index=False)
     return path
 
@@ -228,7 +243,8 @@ def export_json(plan, df, path="distribution_plan.json"):
                 for n, c in CLUSTERS.items()}
     doc = {
         "clusters": clusters,
-        "horizons": {"endgame_days": PLACE_T, "ramp_days": RAMP_T, "early_days": EARLY_T},
+        "horizons": {"early_days": EARLY_T, "month_days": MONTH_T, "ramp_days": RAMP_T,
+                     "placement_basis_days": SAT_T},
         **{k: v.to_dict(orient="records") for k, v in t.items()},
     }
     with open(path, "w") as f:
