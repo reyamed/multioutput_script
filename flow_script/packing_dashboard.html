@@ -90,6 +90,16 @@ section{margin-top:22px}
 .leg{display:flex;gap:12px;margin:2px 0 8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
 .leg span{display:inline-flex;align-items:center;gap:5px}
 
+/* source drain */
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.srccard{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px}
+.srchd{font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.srcbig{font-family:var(--mono);font-size:15px;font-weight:700}
+.srcbig .arrow{color:var(--faint);font-weight:400;margin:0 3px}
+.deltachip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;margin:6px 0 2px}
+.deltachip.down{background:var(--ok-bg);color:var(--ok)}
+.deltachip.up{background:var(--warn-bg);color:var(--warn)}
+
 /* filters + table */
 .filters{display:flex;flex-wrap:wrap;gap:9px;align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow);margin-bottom:10px}
 .filters .search{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px;min-width:150px}
@@ -169,6 +179,11 @@ section{margin-top:22px}
     <div class="ramp" id="rampGrid"></div>
   </section>
 
+  <section id="sourceSection" style="display:none">
+    <div class="sechead"><h2>Source cluster drain</h2><span class="note">how the source empties after the one-shot redirect · at redirect → 2wk → 1mo → 3mo (highlighted dot = selected horizon)</span></div>
+    <div class="srcgrid" id="srcGrid"></div>
+  </section>
+
   <section>
     <div class="sechead"><h2>Flows</h2><span class="note" id="flowNote"></span></div>
     <div class="filters">
@@ -197,8 +212,10 @@ section{margin-top:22px}
 /* ============================ constants ============================ */
 const DIMS=['hot','cold','shards'];
 const DIM_LABEL={hot:'Hot',cold:'Cold',shards:'Shards'};
-const HORIZONS=['2wk','3mo','endgame'];
-const HZLAB={'2wk':'2 wk','3mo':'3 mo','endgame':'endgame'};
+const HORIZONS=['2wk','1mo','3mo'];
+const HZLAB={'2wk':'2 wk','1mo':'1 mo','3mo':'3 mo'};
+const FINAL=HORIZONS[HORIZONS.length-1];            // final/placement horizon (was 'endgame')
+const emptyUse=()=>Object.fromEntries(HORIZONS.map(h=>[h,{hot:0,cold:0,shards:0}]));
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const DIMC={hot:()=>css('--hot'),cold:()=>css('--cold'),shards:()=>css('--shard')};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -206,7 +223,7 @@ const tip=$('#tip');
 
 /* ============================ state ============================ */
 let MODEL=null;              // {clusters, flows}
-let VIEW={horizon:'endgame', ratio:0.5, selCluster:null, selFlow:null,
+let VIEW={horizon:FINAL, ratio:0.5, selCluster:null, selFlow:null,
           fClass:new Set(), fCluster:new Set(), fOver:false, fMulti:false, q:'',
           sortKey:'shards', sortDir:-1};
 let USAGE=null;              // usage[clusterId][horizon][dim]  (from assignments; cached)
@@ -355,6 +372,41 @@ function renderRamp(){
     el.innerHTML=`<div class="t"><span>${cl.id}</span>${tag}</div>
       <div class="leg">${DIMS.map(d=>`<span><span class="gswatch" style="background:${DIMC[d]()}"></span>${DIM_LABEL[d]}</span>`).join('')}</div>${svg}`;
     grid.appendChild(el);
+  });
+}
+
+/* ============================ render: source cluster drain ============================ */
+const fmtSrc=(dim,v)=> dim==='shards'? fmtInt(v): fmtTB(v);
+function renderSource(){
+  const sec=$('#sourceSection');
+  if(!MODEL.source||MODEL.source.length<2){sec.style.display='none';return;}
+  sec.style.display='';
+  const S=MODEL.source, grid=$('#srcGrid'); grid.innerHTML='';
+  DIMS.forEach(dim=>{
+    const vals=S.map(s=>s[dim]);
+    const pk=vals[0], en=vals[vals.length-1];
+    const delta = pk>0? (en-pk)/pk : 0;
+    const col=DIMC[dim]();
+    const W=252,H=88,pad={l:8,r:8,t:10,b:16}; const iw=W-pad.l-pad.r, ih=H-pad.t-pad.b;
+    const maxv=Math.max(...vals,1)*1.08; const x=i=>pad.l+iw*i/(vals.length-1); const y=v=>pad.t+ih*(1-v/maxv);
+    const pts=vals.map((v,i)=>[x(i),y(v)]);
+    let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">`;
+    svg+=`<path d="M${pts[0][0]},${pad.t+ih} ${pts.map(p=>'L'+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')} L${pts[pts.length-1][0]},${pad.t+ih} Z" fill="${col}" opacity=".12"/>`;
+    svg+=`<polyline fill="none" stroke="${col}" stroke-width="2" points="${pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"/>`;
+    pts.forEach((p,i)=>{const active=S[i].canon===VIEW.horizon;
+      svg+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${active?4:2.4}" fill="${col}" stroke="var(--panel)" stroke-width="1.5"/>`
+         + (active?`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="6.5" fill="none" stroke="${col}" stroke-width="1" opacity=".5"/>`:'');});
+    S.forEach((s,i)=>svg+=`<text x="${x(i)}" y="${H-4}" text-anchor="middle" font-size="8" fill="var(--muted)">${s.short}</text>`);
+    svg+='</svg>';
+    const card=document.createElement('div');card.className='srccard';
+    card.innerHTML=`<div class="srchd"><span class="gswatch" style="background:${col}"></span>${DIM_LABEL[dim]}${dim!=='shards'?' <span style="color:var(--faint);font-weight:400">(TB)</span>':''}</div>
+      <div class="srcbig">${fmtSrc(dim,pk)}<span class="arrow">→</span>${fmtSrc(dim,en)}</div>
+      <div class="deltachip ${delta<=0?'down':'up'}">${delta<=0?'▼':'▲'} ${Math.abs(delta*100).toFixed(0)}% ${delta<=0?'drained':'grew'}</div>
+      ${svg}`;
+    card.addEventListener('mousemove',e=>showTip(e,`<b>Source · ${DIM_LABEL[dim]}</b><br>`+
+      S.map(s=>`${s.short}: <b>${fmtSrc(dim,s[dim])}</b>`).join('<br>')));
+    card.addEventListener('mouseleave',hideTip);
+    grid.appendChild(card);
   });
 }
 
@@ -530,15 +582,16 @@ window.addEventListener('resize',()=>{renderRamp();});
 function loadModel(raw){
   MODEL=raw; recomputeUsage();
   VIEW.selCluster=null;VIEW.selFlow=null;VIEW.fCluster=new Set();VIEW.fClass=new Set();
-  renderHorizonSeg();renderBanner();renderClusters();renderRamp();buildFilterChips();renderTable();
+  renderHorizonSeg();renderBanner();renderClusters();renderRamp();renderSource();buildFilterChips();renderTable();
   $('#drill').className='drill';
 }
-function renderAll(){renderHorizonSeg();renderBanner();renderClusters();renderRamp();renderTable();}
+function renderAll(){renderHorizonSeg();renderBanner();renderClusters();renderRamp();renderSource();renderTable();}
 
 /* Excel reader — maps the planner's workbook to MODEL.
-   Expected: sheet "clusters"(cluster,hot_tb,cold_tb,shard_cap[,ratio]);
-   sheet "flows"(flow,class,cluster,retentions,over_budget, hot_2wk,cold_2wk,shards_2wk, hot_3mo,...,hot_endgame,...);
-   optional sheet "streams"(flow,retention, hot_2wk,...). Falls back gracefully. */
+   flow_assignments(flow,class,retentions,cluster, hot_gb_2wk,cold_gb_2wk,sh_2wk, ..._1mo, ..._3mo);
+   summary_2weeks / summary_1month / summary_3months(cluster, hot_tb, hot_pct_of_budget, ...);
+   source_evolution(horizon,days,hot_tb,cold_tb,total_tb,shards); optional streams(flow,retention,...).
+   Horizons: 2wk / 1mo / 3mo, final = 3mo. Falls back gracefully. */
 $('#file').addEventListener('change',ev=>{
   const f=ev.target.files[0]; if(!f)return;
   const rd=new FileReader();
@@ -559,7 +612,7 @@ function parseFoot(row){
   const f={}; HORIZONS.forEach(h=>f[h]={hot:0,cold:0,shards:0});
   for(const key of Object.keys(row)){
     const k=key.toLowerCase();
-    let hz = /2wk|2week|_2w/.test(k)?'2wk' : /3mo|3month|_3m/.test(k)?'3mo' : /end/.test(k)?'endgame' : null;
+    let hz = /2wk|2week|_2w/.test(k)?'2wk' : /1mo|1month|_1m/.test(k)?'1mo' : /3mo|3month|_3m/.test(k)?'3mo' : null;
     if(!hz||!f[hz])continue;
     let dim = /(^|[^a-z])sh(ard)?s?([^a-z]|$)/.test(k)?'shards' : /hot/.test(k)?'hot' : /cold/.test(k)?'cold' : null;
     if(!dim)continue;
@@ -601,22 +654,22 @@ function parseWorkbook(wb){
     };
   });
   // ---- summaries: per-cluster usage per horizon + back-computed budgets ----
-  const usage={}, order=[], endRow={};
-  const hzOf=n=>{const s=n.toLowerCase(); return /2w|2week/.test(s)?'2wk': /3m|3month/.test(s)?'3mo': /end/.test(s)?'endgame':null;};
+  const usage={}, order=[], finalRow={};
+  const hzOf=n=>{const s=n.toLowerCase(); return /2w|2week/.test(s)?'2wk': /1m|1month/.test(s)?'1mo': /3m|3month/.test(s)?'3mo': /end/.test(s)?'3mo':null;};
   for(const sn of wb.SheetNames.filter(s=>s.toLowerCase().includes('summary'))){
-    const hz=hzOf(sn); if(!hz)continue;
+    const hz=hzOf(sn); if(!hz||!HORIZONS.includes(hz))continue;
     for(const r of sheetRows(wb,sn)){
       const id=String(get(r,['cluster','clusterid','name'])??'').trim();
       if(!id||id==='None'||id==='?')continue;
-      if(!usage[id]){usage[id]={'2wk':{hot:0,cold:0,shards:0},'3mo':{hot:0,cold:0,shards:0},'endgame':{hot:0,cold:0,shards:0}}; order.push(id);}
+      if(!usage[id]){usage[id]=emptyUse(); order.push(id);}
       usage[id][hz]={hot:sHotCold(r,/hot/), cold:sHotCold(r,/cold/), shards:sShards(r)};
-      if(hz==='endgame')endRow[id]=r;
+      if(hz===FINAL)finalRow[id]=r;
     }
   }
   let clusters;
   if(order.length){
     clusters=order.map(id=>{
-      const r=endRow[id]||{};
+      const r=finalRow[id]||{};
       const hu=sHotCold(r,/hot/), cu=sHotCold(r,/cold/), su=sShards(r);
       const hp=sPct(r,/hot/), cp=sPct(r,/cold/), sp=sPct(r,/shard|(^|_)sh(_|$)/);
       const limHot = hp>0? hu/(hp/100) : (hu>0?hu:1);      // "budget" = usage / pct-of-budget
@@ -625,11 +678,11 @@ function parseWorkbook(wb){
       return {id, hot_tb:+(limHot/RATIO0).toFixed(1), cold_tb:+(limCold/RATIO0).toFixed(1), shard_cap:shardCap||100000, ratio:null};
     });
   }else{
-    // no summary sheets -> derive from flow sums, target ~60% at endgame
+    // no summary sheets -> derive from flow sums, target ~60% at the final horizon
     const ids=[...new Set(flows.map(f=>f.cluster))]; clusters=[];
-    ids.forEach(id=>usage[id]={'2wk':{hot:0,cold:0,shards:0},'3mo':{hot:0,cold:0,shards:0},'endgame':{hot:0,cold:0,shards:0}});
+    ids.forEach(id=>usage[id]=emptyUse());
     flows.forEach(f=>{const u=usage[f.cluster]; if(!u)return; for(const h of HORIZONS){u[h].hot+=f.foot[h].hot;u[h].cold+=f.foot[h].cold;u[h].shards+=f.foot[h].shards;}});
-    ids.forEach(id=>{const e=usage[id].endgame; clusters.push({id,
+    ids.forEach(id=>{const e=usage[id][FINAL]; clusters.push({id,
       hot_tb:+(((e.hot/0.6)||1)/RATIO0).toFixed(1), cold_tb:+(((e.cold/0.6)||1)/RATIO0).toFixed(1),
       shard_cap:Math.max(1000,Math.round((e.shards/0.6)/1000)*1000)||100000, ratio:null});});
   }
@@ -639,20 +692,34 @@ function parseWorkbook(wb){
     for(const r of sheetRows(wb,stName)){const f=byId.get(String(get(r,['flow','flowid','id'])));
       if(!f)continue; f.streams.push({retention:String(get(r,['retention','ret'])??'—'),foot:parseFoot(r)}); f._hasStreams=true;}}
   for(const f of flows)if(!f.streams.length)f.streams=[{retention:f.retentions.join(','),foot:f.foot}];
+  // ---- source cluster drain time-series (optional) ----
+  const source=[];
+  const srcName=findSheet(wb,s=>(s.includes('source')&&s.includes('evol'))) || findSheet(wb,s=>s.includes('evolution'));
+  if(srcName){
+    for(const r of sheetRows(wb,srcName)){
+      const hz=String(get(r,['horizon','phase','time','stage'])??'').trim(); if(!hz)continue;
+      const days=num(get(r,['days','day','t']));
+      const lc=hz.toLowerCase();
+      const canon = (/redirect/.test(lc)||days===0)?'redirect' : /2w|2week/.test(lc)?'2wk' : /1m|1month/.test(lc)?'1mo' : /3m|3month/.test(lc)?'3mo' : /end/.test(lc)?'3mo' : lc;
+      const short = canon==='redirect'?'redirect':canon==='2wk'?'2 wk':canon==='1mo'?'1 mo':canon==='3mo'?'3 mo':hz;
+      source.push({label:hz, canon, short, days, hot:sHotCold(r,/hot/), cold:sHotCold(r,/cold/), total:sHotCold(r,/total/), shards:sShards(r)});
+    }
+    source.sort((a,b)=>a.days-b.days);
+  }
   // ---- derive over_budget when the export has no such column ----
   if(!flows.some(f=>f._obExplicit)){
     for(const cl of clusters){
       const lim={hot:0.5*cl.hot_tb, cold:0.5*cl.cold_tb, shards:cl.shard_cap};
-      const u=usage[cl.id]&&usage[cl.id].endgame; if(!u)continue;
+      const u=usage[cl.id]&&usage[cl.id][FINAL]; if(!u)continue;
       const ut={hot:lim.hot?u.hot/lim.hot:0, cold:lim.cold?u.cold/lim.cold:0, shards:lim.shards?u.shards/lim.shards:0};
       let td='hot',bu=0; for(const d of DIMS)if(ut[d]>bu){bu=ut[d];td=d;}
       if(bu<=1)continue;
-      const mine=flows.filter(f=>f.cluster===cl.id).sort((a,b)=>b.foot.endgame[td]-a.foot.endgame[td]);
+      const mine=flows.filter(f=>f.cluster===cl.id).sort((a,b)=>b.foot[FINAL][td]-a.foot[FINAL][td]);
       const total=u[td]||1, excess=1-1/bu; let acc=0;
-      for(const f of mine){f.over_budget=true; acc+=f.foot.endgame[td]; if(acc/total>=excess+0.05)break;}
+      for(const f of mine){f.over_budget=true; acc+=f.foot[FINAL][td]; if(acc/total>=excess+0.05)break;}
     }
   }
-  return {clusters, flows, usage};
+  return {clusters, flows, usage, source};
 }
 
 /* ============================ synthetic data ============================ */
@@ -688,7 +755,7 @@ function SAMPLE_RAW(){
       const shardsFull=idxCount*C.shardy*rf(.7,1.4);
       const foot={};
       for(const h of HORIZONS){
-        const elapsed = h==='2wk'?14: h==='3mo'?90: R; // endgame = fully saturated
+        const elapsed = h==='2wk'?14: h==='1mo'?30: 92; // reported horizons: 2wk / 1mo / 3mo (T=92)
         const coldFill=Math.min(1,elapsed/R), hotFill=Math.min(1,elapsed/hotDays);
         foot[h]={hot:hotFull*hotFill, cold:coldFull*coldFill, shards:shardsFull*coldFill};
       }
@@ -699,7 +766,7 @@ function SAMPLE_RAW(){
     flows.push({id:`${cls}-${String(i).padStart(4,'0')}`,cls,cluster:C.home,
       retentions:rets.map(r=>r+'d'),multi:rets.length>1,over_budget:false,foot,streams,_hasStreams:true});
   }
-  // targets per cluster/dim → set caps & scale shards so intended breaches occur at endgame
+  // targets per cluster/dim → set caps & scale shards so intended breaches occur at the final horizon
   const targets={
     'hot-edge-01':{hot:.74,cold:.66,shards:.5},
     'core-logs-02':{hot:.7,cold:.72,shards:.58},
@@ -710,9 +777,9 @@ function SAMPLE_RAW(){
   const clusters=[];
   clusterIds.forEach(id=>{
     const mine=flows.filter(f=>f.cluster===id);
-    const endUse=d=>mine.reduce((s,f)=>s+f.foot.endgame[d],0);
+    const endUse=d=>mine.reduce((s,f)=>s+f.foot[FINAL][d],0);
     const t=targets[id];
-    // shards: fixed cap 100000, scale flow shards to hit t.shards*100000 at endgame
+    // shards: fixed cap 100000, scale flow shards to hit t.shards*100000 at the final horizon
     const shard_cap=100000; const curShards=endUse('shards')||1; const sScale=t.shards*shard_cap/curShards;
     mine.forEach(f=>{HORIZONS.forEach(h=>{f.foot[h].shards*=sScale;});f.streams.forEach(s=>HORIZONS.forEach(h=>s.foot[h].shards*=sScale));});
     // hot/cold caps from usage & target with ratio 0.5:  limit=0.5*cap ; util=use/limit=t  -> cap=use/(0.5*t)
@@ -720,31 +787,39 @@ function SAMPLE_RAW(){
     const cold_tb=+(endUse('cold')/(0.5*t.cold)).toFixed(0);
     clusters.push({id,hot_tb,cold_tb,shard_cap,ratio:null});
   });
-  // over_budget: flows in a cluster that breaches at endgame, and are top contributors to that tightest dim
+  // over_budget: flows in a cluster that breaches at the final horizon, and are top contributors to that tightest dim
   const tmpUsage={}; clusters.forEach(cl=>{tmpUsage[cl.id]={hot:0,cold:0,shards:0};});
-  flows.forEach(f=>{const u=tmpUsage[f.cluster];u.hot+=f.foot.endgame.hot;u.cold+=f.foot.endgame.cold;u.shards+=f.foot.endgame.shards;});
+  flows.forEach(f=>{const u=tmpUsage[f.cluster];u.hot+=f.foot[FINAL].hot;u.cold+=f.foot[FINAL].cold;u.shards+=f.foot[FINAL].shards;});
   clusters.forEach(cl=>{
     const lim={hot:.5*cl.hot_tb,cold:.5*cl.cold_tb,shards:cl.shard_cap};
     const utils={hot:tmpUsage[cl.id].hot/lim.hot,cold:tmpUsage[cl.id].cold/lim.cold,shards:tmpUsage[cl.id].shards/lim.shards};
     let td='hot',bu=0;for(const d of DIMS)if(utils[d]>bu){bu=utils[d];td=d;}
     if(bu<=1)return; // not over → nothing flagged
-    const mine=flows.filter(f=>f.cluster===cl.id).sort((a,b)=>b.foot.endgame[td]-a.foot.endgame[td]);
+    const mine=flows.filter(f=>f.cluster===cl.id).sort((a,b)=>b.foot[FINAL][td]-a.foot[FINAL][td]);
     // flag enough top contributors to represent the overflow (~the excess share)
     const excess=1-1/bu; // fraction over
     let acc=0; const total=tmpUsage[cl.id][td];
-    for(const f of mine){f.over_budget=true;acc+=f.foot.endgame[td];if(acc/total>=excess+0.05)break;}
+    for(const f of mine){f.over_budget=true;acc+=f.foot[FINAL][td];if(acc/total>=excess+0.05)break;}
   });
-  return {clusters,flows};
+  // synthetic source-cluster drain (so the demo shows the section)
+  const source=[
+    {label:'at_redirect',canon:'redirect',short:'redirect',days:0,  hot:94.0,cold:612.0,total:706.0,shards:128000},
+    {label:'2weeks',     canon:'2wk',     short:'2 wk',   days:14, hot:66.0,cold:571.0,total:637.0,shards:44000},
+    {label:'1month',     canon:'1mo',     short:'1 mo',   days:30, hot:66.0,cold:512.0,total:578.0,shards:34000},
+    {label:'3months',    canon:'3mo',     short:'3 mo',   days:92, hot:66.0,cold:468.0,total:534.0,shards:29500},
+  ];
+  return {clusters,flows,source};
 }
 
 /* schema footer */
-$('#schemaFoot').innerHTML=`<b>Matched to your planner export.</b> The loader reads:
-  <code>flow_assignments</code> → <code>flow, class, retentions, cluster, hot_gb_end, cold_gb_end, sh_end, …_3mo, …_2wk</code> (GB → shown as GB/TB);
-  <code>summary_2weeks / summary_3months / summary_endgame</code> → <code>cluster, hot_tb, hot_pct_of_budget, cold_tb, cold_pct_of_budget, shards, shard_pct_of_cap</code>
-  — each cluster's <b>budget</b> is back-computed as usage ÷ pct (hot/cold budget = the 50% target; shard cap ≈ shards ÷ shard_pct ≈ 100k).
+$('#schemaFoot').innerHTML=`<b>Matched to your planner export.</b> Horizons <b>2wk / 1mo / 3mo</b> (final = 3mo). The loader reads:
+  <code>flow_assignments</code> → <code>flow, class, retentions, cluster, hot_gb_2wk, cold_gb_2wk, sh_2wk, …_1mo, …_3mo</code> (GB → shown as GB/TB);
+  <code>summary_2weeks / summary_1month / summary_3months</code> → <code>cluster, hot_tb, hot_pct_of_budget, cold_tb, cold_pct_of_budget, shards, shard_pct_of_cap</code>
+  — each cluster's <b>budget</b> is back-computed as usage ÷ pct at the final horizon (hot/cold budget = the 50% target; shard cap ≈ shards ÷ shard_pct ≈ 100k).
+  <code>source_evolution</code> → <code>horizon, days, hot_tb, cold_tb, total_tb, shards</code> (at_redirect → 2wk → 1mo → 3mo) drives the <b>Source cluster drain</b> section.
   <code>kept_on_source</code> (major flows that stay put) is <b>excluded</b> from the distribution view.
-  <b>over_budget</b> is <b>derived</b> (cluster over its limit at endgame + top contributor on the tightest dim) because the export has no such column — add one and it's honored verbatim.
-  Per-retention drill-down needs an optional <code>streams</code> sheet (<code>flow, retention, hot_gb_end, …</code>).`;
+  <b>over_budget</b> is <b>derived</b> (cluster over its limit at the final horizon + top contributor on the tightest dim) because the export has no such column — add one and it's honored verbatim.
+  Per-retention drill-down needs an optional <code>streams</code> sheet (<code>flow, retention, hot_gb_2wk, …</code>).`;
 
 /* boot */
 loadModel(SAMPLE_RAW());
