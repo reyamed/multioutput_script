@@ -53,29 +53,29 @@ section{margin-top:22px}
 .banner.bad{background:var(--bad-bg);color:var(--bad)}
 .banner.ok{background:var(--ok-bg);color:var(--ok)}
 
-/* cluster cards */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:13px 14px;cursor:pointer;transition:border-color .12s,box-shadow .12s;position:relative}
+/* cluster cards — few clusters, so make them large and fill the width */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:20px 22px;cursor:pointer;transition:border-color .12s,box-shadow .12s;position:relative}
 .card:hover{border-color:var(--accent)}
 .card.sel{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 .card.breach{border-color:var(--bad)}
 .card.breach.sel{box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 25%,transparent)}
-.card .top{display:flex;align-items:center;gap:8px;margin-bottom:11px}
-.card .cname{font-weight:700;font-size:13.5px;font-family:var(--mono)}
-.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.card .top{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.card .cname{font-weight:700;font-size:17px;font-family:var(--mono)}
+.dot{width:11px;height:11px;border-radius:50%;flex:none}
 .dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
-.chip{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:5px;letter-spacing:.02em}
+.chip{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.02em}
 .chip.bad{background:var(--bad-bg);color:var(--bad)}
 .chip.warn{background:var(--warn-bg);color:var(--warn)}
-.gauge{margin:9px 0}
-.gauge .lab{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:4px}
-.gauge .lab .dim{font-weight:700;display:flex;align-items:center;gap:6px}
-.gauge .lab .val{font-family:var(--mono);color:var(--muted)}
-.gauge .lab .val b{color:var(--ink)}
-.gswatch{width:8px;height:8px;border-radius:2px;display:inline-block}
-.track{position:relative;height:12px;border-radius:6px;background:var(--border2);overflow:hidden}
-.fill{position:absolute;top:0;left:0;height:100%;border-radius:6px 0 0 6px}
-.limit{position:absolute;top:-2px;height:16px;width:2px;background:var(--ink);opacity:.55}
+.gauge{margin:14px 0}
+.gauge .lab{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.gauge .lab .dim{font-weight:700;display:flex;align-items:center;gap:7px}
+.gauge .lab .val{font-family:var(--mono);color:var(--muted);font-size:12.5px}
+.gauge .lab .val b{color:var(--ink);font-size:14px}
+.gswatch{width:9px;height:9px;border-radius:2px;display:inline-block}
+.track{position:relative;height:18px;border-radius:9px;background:var(--border2);overflow:hidden}
+.fill{position:absolute;top:0;left:0;height:100%;border-radius:9px 0 0 9px}
+.limit{position:absolute;top:-2px;height:22px;width:2px;background:var(--ink);opacity:.55}
 .limit::after{content:"";position:absolute}
 .editbtn{font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px}
 .editor{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:none;grid-template-columns:1fr 1fr;gap:8px}
@@ -84,19 +84,21 @@ section{margin-top:22px}
 .editor input{width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12px;margin-top:2px}
 
 /* ramp */
-.ramp{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.mini{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:11px 12px}
-.mini .t{font-weight:700;font-size:12.5px;font-family:var(--mono);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.ramp{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px}
+.mini{background:var(--panel);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px}
+.mini .t{font-weight:700;font-size:14px;font-family:var(--mono);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
 .leg{display:flex;gap:12px;margin:2px 0 8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
 .leg span{display:inline-flex;align-items:center;gap:5px}
 
 /* source drain */
-.srcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-.srccard{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px}
-.srchd{font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:7px;margin-bottom:6px}
-.srcbig{font-family:var(--mono);font-size:15px;font-weight:700}
-.srcbig .arrow{color:var(--faint);font-weight:400;margin:0 3px}
-.deltachip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;margin:6px 0 2px}
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:14px}
+.srccard{background:var(--panel);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:15px 17px}
+.srchd{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.srcbig{font-family:var(--mono);font-size:17px;font-weight:700}
+.srcbig .arrow{color:var(--faint);font-weight:400;margin:0 4px}
+.srcsub{font-size:11.5px;color:var(--muted);margin-top:5px}
+.srcsub b{color:var(--ink)}
+.deltachip{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:5px;margin:7px 0 2px}
 .deltachip.down{background:var(--ok-bg);color:var(--ok)}
 .deltachip.up{background:var(--warn-bg);color:var(--warn)}
 
@@ -180,7 +182,7 @@ section{margin-top:22px}
   </section>
 
   <section id="sourceSection" style="display:none">
-    <div class="sechead"><h2>Source cluster drain</h2><span class="note">how the source empties after the one-shot redirect · at redirect → 2wk → 1mo → 3mo (highlighted dot = selected horizon)</span></div>
+    <div class="sechead"><h2>Source cluster drain</h2><span class="note">source total = kept baseline (majors that stay) + draining redirected load → 0 · at redirect → 2wk → 1mo → 3mo</span></div>
     <div class="srcgrid" id="srcGrid"></div>
   </section>
 
@@ -349,7 +351,7 @@ function renderClusters(){
 function renderRamp(){
   const grid=$('#rampGrid'); grid.innerHTML='';
   MODEL.clusters.forEach(cl=>{
-    const W=232,H=116,pad={l:30,r:10,t:10,b:20};
+    const W=380,H=170,pad={l:38,r:14,t:14,b:26};
     const iw=W-pad.l-pad.r, ih=H-pad.t-pad.b;
     let ymax=1.2; for(const h of HORIZONS)for(const d of DIMS)ymax=Math.max(ymax,util(cl,h,d));
     ymax=Math.min(ymax,3); const x=i=>pad.l+iw*i/(HORIZONS.length-1); const y=v=>pad.t+ih*(1-Math.min(v,ymax)/ymax);
@@ -357,16 +359,19 @@ function renderRamp(){
     const s=clusterStatus(cl);
     const tag=s.breachNow?'<span class="chip bad">OVER</span>':s.breachLater?'<span class="chip warn">LATE</span>':'';
     let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">`;
+    // y gridlines at 25/50/75/100%
+    [0.25,0.5,0.75].forEach(g=>{ if(g<=ymax){svg+=`<line x1="${pad.l}" y1="${y(g)}" x2="${W-pad.r}" y2="${y(g)}" stroke="${css('--border2')}" stroke-width="1"/>`
+      +`<text x="${pad.l-5}" y="${y(g)+3}" text-anchor="end" font-size="8.5" fill="${css('--faint')}">${g*100|0}%</text>`;}});
     // 100% ref line
-    svg+=`<line x1="${pad.l}" y1="${y(1)}" x2="${W-pad.r}" y2="${y(1)}" stroke="${css('--bad')}" stroke-dasharray="3 3" stroke-width="1" opacity=".7"/>`;
-    svg+=`<text x="${W-pad.r}" y="${y(1)-3}" text-anchor="end" font-size="8.5" fill="${css('--bad')}">100%</text>`;
+    svg+=`<line x1="${pad.l}" y1="${y(1)}" x2="${W-pad.r}" y2="${y(1)}" stroke="${css('--bad')}" stroke-dasharray="4 3" stroke-width="1.2" opacity=".8"/>`;
+    svg+=`<text x="${W-pad.r}" y="${y(1)-4}" text-anchor="end" font-size="9.5" fill="${css('--bad')}" font-weight="700">100% limit</text>`;
     // axis labels
-    HORIZONS.forEach((h,i)=>svg+=`<text x="${x(i)}" y="${H-6}" text-anchor="middle" font-size="9" fill="${css('--muted')}">${HZLAB[h]}</text>`);
+    HORIZONS.forEach((h,i)=>svg+=`<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="11" fill="${css('--muted')}">${HZLAB[h]}</text>`);
     DIMS.forEach(d=>{
       const pts=HORIZONS.map((h,i)=>[x(i),y(util(cl,h,d))]);
-      svg+=`<polyline fill="none" stroke="${DIMC[d]()}" stroke-width="2" points="${pts.map(p=>p.join(',')).join(' ')}"/>`;
+      svg+=`<polyline fill="none" stroke="${DIMC[d]()}" stroke-width="2.6" points="${pts.map(p=>p.map(n=>n.toFixed(1)).join(',')).join(' ')}"/>`;
       pts.forEach((p,i)=>{const over=util(cl,HORIZONS[i],d)>1;
-        svg+=`<circle cx="${p[0]}" cy="${p[1]}" r="${over?3.4:2.4}" fill="${over?css('--bad'):DIMC[d]()}" stroke="var(--panel)" stroke-width="1"/>`;});
+        svg+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${over?4.4:3.2}" fill="${over?css('--bad'):DIMC[d]()}" stroke="var(--panel)" stroke-width="1.5"/>`;});
     });
     svg+='</svg>';
     el.innerHTML=`<div class="t"><span>${cl.id}</span>${tag}</div>
@@ -376,35 +381,49 @@ function renderRamp(){
 }
 
 /* ============================ render: source cluster drain ============================ */
-const fmtSrc=(dim,v)=> dim==='shards'? fmtInt(v): fmtTB(v);
+function srcColor(key){return key==='shards'?DIMC.shards():key==='hot'?DIMC.hot():key==='cold'||key==='storage'?DIMC.cold():DIMC.shards();}
 function renderSource(){
-  const sec=$('#sourceSection');
-  if(!MODEL.source||MODEL.source.length<2){sec.style.display='none';return;}
+  const sec=$('#sourceSection'), S=MODEL.source;
+  if(!S||!S.groups||!S.groups.length||S.points.length<2){sec.style.display='none';return;}
   sec.style.display='';
-  const S=MODEL.source, grid=$('#srcGrid'); grid.innerHTML='';
-  DIMS.forEach(dim=>{
-    const vals=S.map(s=>s[dim]);
-    const pk=vals[0], en=vals[vals.length-1];
+  const P=S.points, grid=$('#srcGrid'); grid.innerHTML='';
+  S.groups.forEach(g=>{
+    const uf=v=> g.unit==='TB'? fmtTB(v): fmtInt(v);
+    const total=g.total, pk=total[0], en=total[total.length-1];
     const delta = pk>0? (en-pk)/pk : 0;
-    const col=DIMC[dim]();
-    const W=252,H=88,pad={l:8,r:8,t:10,b:16}; const iw=W-pad.l-pad.r, ih=H-pad.t-pad.b;
-    const maxv=Math.max(...vals,1)*1.08; const x=i=>pad.l+iw*i/(vals.length-1); const y=v=>pad.t+ih*(1-v/maxv);
-    const pts=vals.map((v,i)=>[x(i),y(v)]);
+    const col=srcColor(g.key), keptCol=css('--faint'), stacked=g.kept&&g.draining;
+    const W=380,H=150,pad={l:8,r:8,t:14,b:18}; const iw=W-pad.l-pad.r, ih=H-pad.t-pad.b;
+    const maxv=Math.max(...total,1)*1.1; const x=i=>pad.l+iw*i/(total.length-1); const y=v=>pad.t+ih*(1-v/maxv);
+    const P2=n=>n.toFixed(1);
     let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">`;
-    svg+=`<path d="M${pts[0][0]},${pad.t+ih} ${pts.map(p=>'L'+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')} L${pts[pts.length-1][0]},${pad.t+ih} Z" fill="${col}" opacity=".12"/>`;
-    svg+=`<polyline fill="none" stroke="${col}" stroke-width="2" points="${pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"/>`;
-    pts.forEach((p,i)=>{const active=S[i].canon===VIEW.horizon;
-      svg+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${active?4:2.4}" fill="${col}" stroke="var(--panel)" stroke-width="1.5"/>`
-         + (active?`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="6.5" fill="none" stroke="${col}" stroke-width="1" opacity=".5"/>`:'');});
-    S.forEach((s,i)=>svg+=`<text x="${x(i)}" y="${H-4}" text-anchor="middle" font-size="8" fill="var(--muted)">${s.short}</text>`);
+    const tpts=total.map((v,i)=>[x(i),y(v)]);
+    if(stacked){
+      const kpts=g.kept.map((v,i)=>[x(i),y(v)]);
+      // kept baseline area (muted)
+      svg+=`<path d="M${P2(kpts[0][0])},${P2(pad.t+ih)} ${kpts.map(p=>'L'+P2(p[0])+','+P2(p[1])).join(' ')} L${P2(kpts[kpts.length-1][0])},${P2(pad.t+ih)} Z" fill="${keptCol}" opacity=".16"/>`;
+      // draining band (between kept and total)
+      svg+=`<path d="M${tpts.map(p=>P2(p[0])+','+P2(p[1])).join(' L')} L${[...kpts].reverse().map(p=>P2(p[0])+','+P2(p[1])).join(' L')} Z" fill="${col}" opacity=".22"/>`;
+      svg+=`<polyline fill="none" stroke="${keptCol}" stroke-width="1.4" stroke-dasharray="3 2" points="${kpts.map(p=>P2(p[0])+','+P2(p[1])).join(' ')}"/>`;
+    }else{
+      svg+=`<path d="M${P2(tpts[0][0])},${P2(pad.t+ih)} ${tpts.map(p=>'L'+P2(p[0])+','+P2(p[1])).join(' ')} L${P2(tpts[tpts.length-1][0])},${P2(pad.t+ih)} Z" fill="${col}" opacity=".14"/>`;
+    }
+    svg+=`<polyline fill="none" stroke="${col}" stroke-width="2.6" points="${tpts.map(p=>P2(p[0])+','+P2(p[1])).join(' ')}"/>`;
+    tpts.forEach((p,i)=>{const active=P[i].canon===VIEW.horizon;
+      svg+=`<circle cx="${P2(p[0])}" cy="${P2(p[1])}" r="${active?4.4:3}" fill="${col}" stroke="var(--panel)" stroke-width="1.6"/>`
+         +(active?`<circle cx="${P2(p[0])}" cy="${P2(p[1])}" r="7.5" fill="none" stroke="${col}" stroke-width="1.2" opacity=".5"/>`:'');});
+    P.forEach((p,i)=>svg+=`<text x="${P2(x(i))}" y="${H-5}" text-anchor="middle" font-size="10" fill="${css('--muted')}">${p.short}</text>`);
     svg+='</svg>';
+    let sub='';
+    if(g.draining){const dp=g.draining[0], dl=g.draining[g.draining.length-1];
+      sub=`<div class="srcsub">redirected load draining: <b>${uf(dp)} → ${dl<=0?'0':uf(dl)}</b>${dl<=0?' — fully redirected':''}</div>`;}
+    const leg = stacked?`<div class="leg" style="margin:5px 0 7px"><span><span class="gswatch" style="background:${col}"></span>draining (leaves)</span><span><span class="gswatch" style="background:${keptCol};opacity:.6"></span>kept (stays)</span></div>`:'';
     const card=document.createElement('div');card.className='srccard';
-    card.innerHTML=`<div class="srchd"><span class="gswatch" style="background:${col}"></span>${DIM_LABEL[dim]}${dim!=='shards'?' <span style="color:var(--faint);font-weight:400">(TB)</span>':''}</div>
-      <div class="srcbig">${fmtSrc(dim,pk)}<span class="arrow">→</span>${fmtSrc(dim,en)}</div>
+    card.innerHTML=`<div class="srchd"><span class="gswatch" style="background:${col}"></span>${g.label}${g.unit?` <span style="color:var(--faint);font-weight:400">(${g.unit})</span>`:''}<span style="color:var(--faint);font-weight:400;margin-left:auto;font-size:11px">source total</span></div>
+      <div class="srcbig">${uf(pk)}<span class="arrow">→</span>${uf(en)}</div>
       <div class="deltachip ${delta<=0?'down':'up'}">${delta<=0?'▼':'▲'} ${Math.abs(delta*100).toFixed(0)}% ${delta<=0?'drained':'grew'}</div>
-      ${svg}`;
-    card.addEventListener('mousemove',e=>showTip(e,`<b>Source · ${DIM_LABEL[dim]}</b><br>`+
-      S.map(s=>`${s.short}: <b>${fmtSrc(dim,s[dim])}</b>`).join('<br>')));
+      ${sub}${leg}${svg}`;
+    card.addEventListener('mousemove',e=>showTip(e,`<b>Source · ${g.label}</b><br>`+
+      P.map((p,i)=>`${p.short}: <b>${uf(total[i])}</b>`+(g.draining?` <span style="color:var(--muted)">(drain ${uf(g.draining[i])})</span>`:'')).join('<br>')));
     card.addEventListener('mouseleave',hideTip);
     grid.appendChild(card);
   });
@@ -693,18 +712,43 @@ function parseWorkbook(wb){
       if(!f)continue; f.streams.push({retention:String(get(r,['retention','ret'])??'—'),foot:parseFoot(r)}); f._hasStreams=true;}}
   for(const f of flows)if(!f.streams.length)f.streams=[{retention:f.retentions.join(','),foot:f.foot}];
   // ---- source cluster drain time-series (optional) ----
-  const source=[];
+  //   New schema: kept_tb/draining_tb/total_tb + kept_shards/draining_shards/total_shards.
+  //   Legacy: hot_tb/cold_tb/shards totals. Normalised to {points, groups:[{key,label,unit,kept,draining,total}]}.
+  let source=null;
   const srcName=findSheet(wb,s=>(s.includes('source')&&s.includes('evol'))) || findSheet(wb,s=>s.includes('evolution'));
   if(srcName){
-    for(const r of sheetRows(wb,srcName)){
-      const hz=String(get(r,['horizon','phase','time','stage'])??'').trim(); if(!hz)continue;
+    const gnum=(r,cands)=>{const v=get(r,cands); const n=parseFloat(v); return isFinite(n)?n:null;};
+    let rows=sheetRows(wb,srcName).map(r=>{
+      const hz=String(get(r,['horizon','phase','time','stage'])??'').trim();
       const days=num(get(r,['days','day','t']));
       const lc=hz.toLowerCase();
-      const canon = (/redirect/.test(lc)||days===0)?'redirect' : /2w|2week/.test(lc)?'2wk' : /1m|1month/.test(lc)?'1mo' : /3m|3month/.test(lc)?'3mo' : /end/.test(lc)?'3mo' : lc;
-      const short = canon==='redirect'?'redirect':canon==='2wk'?'2 wk':canon==='1mo'?'1 mo':canon==='3mo'?'3 mo':hz;
-      source.push({label:hz, canon, short, days, hot:sHotCold(r,/hot/), cold:sHotCold(r,/cold/), total:sHotCold(r,/total/), shards:sShards(r)});
+      const canon=(/redirect/.test(lc)||days===0)?'redirect':/2w|2week/.test(lc)?'2wk':/1m|1month/.test(lc)?'1mo':/3m|3month/.test(lc)?'3mo':/end/.test(lc)?'3mo':lc;
+      const short=canon==='redirect'?'redirect':canon==='2wk'?'2 wk':canon==='1mo'?'1 mo':canon==='3mo'?'3 mo':hz;
+      return {label:hz,canon,short,days,r};
+    }).filter(p=>p.label);
+    rows.sort((a,b)=>a.days-b.days);
+    if(rows.length>=2){
+      const points=rows.map(p=>({label:p.label,canon:p.canon,short:p.short,days:p.days}));
+      const has=cands=>rows.some(p=>gnum(p.r,cands)!=null);
+      const ser=cands=>rows.map(p=>{const v=gnum(p.r,cands); return v==null?0:v;});
+      const mk=(key,label,unit,keptC,drainC,totalC)=>{
+        if(!has(keptC)&&!has(drainC)&&!has(totalC))return null;
+        const kept=has(keptC)?ser(keptC):null, draining=has(drainC)?ser(drainC):null;
+        let total=has(totalC)?ser(totalC):null;
+        if(!total) total=points.map((_,i)=>(kept?kept[i]:0)+(draining?draining[i]:0));
+        return {key,label,unit,kept,draining,total};
+      };
+      const groups=[];
+      const g1=mk('storage','Storage','TB',['kepttb'],['drainingtb','draintb'],['totaltb']);      if(g1)groups.push(g1);
+      const g2=mk('shards','Shards','',['keptshards'],['drainingshards','drainshards'],['totalshards']); if(g2)groups.push(g2);
+      if(!groups.length){ // legacy hot/cold/shards totals
+        const l1=mk('hot','Hot','TB',[],[],['hottb']); if(l1)groups.push(l1);
+        const l2=mk('cold','Cold','TB',[],[],['coldtb']); if(l2)groups.push(l2);
+        const l3=mk('shards','Shards','',[],[],['shards','totalshards']); if(l3)groups.push(l3);
+        if(!groups.length){const l4=mk('storage','Storage','TB',[],[],['totaltb']); if(l4)groups.push(l4);}
+      }
+      if(groups.length) source={points,groups};
     }
-    source.sort((a,b)=>a.days-b.days);
   }
   // ---- derive over_budget when the export has no such column ----
   if(!flows.some(f=>f._obExplicit)){
@@ -801,13 +845,19 @@ function SAMPLE_RAW(){
     let acc=0; const total=tmpUsage[cl.id][td];
     for(const f of mine){f.over_budget=true;acc+=f.foot[FINAL][td];if(acc/total>=excess+0.05)break;}
   });
-  // synthetic source-cluster drain (so the demo shows the section)
-  const source=[
-    {label:'at_redirect',canon:'redirect',short:'redirect',days:0,  hot:94.0,cold:612.0,total:706.0,shards:128000},
-    {label:'2weeks',     canon:'2wk',     short:'2 wk',   days:14, hot:66.0,cold:571.0,total:637.0,shards:44000},
-    {label:'1month',     canon:'1mo',     short:'1 mo',   days:30, hot:66.0,cold:512.0,total:578.0,shards:34000},
-    {label:'3months',    canon:'3mo',     short:'3 mo',   days:92, hot:66.0,cold:468.0,total:534.0,shards:29500},
+  // synthetic source drain (kept baseline + draining redirected load → 0)
+  const spts=[
+    {label:'at_redirect',canon:'redirect',short:'redirect',days:0},
+    {label:'2weeks',     canon:'2wk',     short:'2 wk',   days:14},
+    {label:'1month',     canon:'1mo',     short:'1 mo',   days:30},
+    {label:'3months',    canon:'3mo',     short:'3 mo',   days:92},
   ];
+  const keptTb=[460,460,460,460], drainTb=[92,64,48,0];
+  const keptSh=[18000,18000,18000,18000], drainSh=[110000,20000,9000,0];
+  const source={points:spts, groups:[
+    {key:'storage',label:'Storage',unit:'TB',kept:keptTb,draining:drainTb,total:keptTb.map((k,i)=>k+drainTb[i])},
+    {key:'shards', label:'Shards', unit:'', kept:keptSh,draining:drainSh,total:keptSh.map((k,i)=>k+drainSh[i])},
+  ]};
   return {clusters,flows,source};
 }
 
@@ -816,7 +866,7 @@ $('#schemaFoot').innerHTML=`<b>Matched to your planner export.</b> Horizons <b>2
   <code>flow_assignments</code> → <code>flow, class, retentions, cluster, hot_gb_2wk, cold_gb_2wk, sh_2wk, …_1mo, …_3mo</code> (GB → shown as GB/TB);
   <code>summary_2weeks / summary_1month / summary_3months</code> → <code>cluster, hot_tb, hot_pct_of_budget, cold_tb, cold_pct_of_budget, shards, shard_pct_of_cap</code>
   — each cluster's <b>budget</b> is back-computed as usage ÷ pct at the final horizon (hot/cold budget = the 50% target; shard cap ≈ shards ÷ shard_pct ≈ 100k).
-  <code>source_evolution</code> → <code>horizon, days, hot_tb, cold_tb, total_tb, shards</code> (at_redirect → 2wk → 1mo → 3mo) drives the <b>Source cluster drain</b> section.
+  <code>source_evolution</code> → <code>horizon, days, kept_tb, draining_tb, total_tb, kept_shards, draining_shards, total_shards</code> (at_redirect → 2wk → 1mo → 3mo) drives the <b>Source cluster drain</b> section (kept baseline + draining load → 0; also reads legacy <code>hot_tb/cold_tb/shards</code>).
   <code>kept_on_source</code> (major flows that stay put) is <b>excluded</b> from the distribution view.
   <b>over_budget</b> is <b>derived</b> (cluster over its limit at the final horizon + top contributor on the tightest dim) because the export has no such column — add one and it's honored verbatim.
   Per-retention drill-down needs an optional <code>streams</code> sheet (<code>flow, retention, hot_gb_2wk, …</code>).`;
