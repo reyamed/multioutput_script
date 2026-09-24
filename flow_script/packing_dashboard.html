@@ -110,6 +110,12 @@ section{margin-top:22px}
 .tog{font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);cursor:pointer;white-space:nowrap}
 .tog.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .tog.bad.on{background:var(--bad);border-color:var(--bad)}
+.classkey{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:11.5px;color:var(--muted);margin:0 2px 10px}
+.classkey>b{color:var(--ink)}
+.classkey .ck{display:inline-flex;gap:4px;padding:2px 8px;border:1px solid var(--border);border-radius:20px;background:var(--panel2)}
+.classkey .ck b{color:var(--ink)}
+.classkey .ck.muted{border:none;background:none;padding:0;color:var(--faint)}
+.classkey .ck.muted b{color:var(--muted)}
 .tblwrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
 .thead,.trow{display:grid;grid-template-columns:34px 1.5fr .9fr 1fr .95fr 86px 86px 92px;align-items:center}
 .thead{position:sticky;top:0;background:var(--panel2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;z-index:2}
@@ -196,6 +202,9 @@ section{margin-top:22px}
       <button class="tog bad" id="overTog">⚑ over-budget only</button>
       <button class="tog" id="multiTog">multi-retention only</button>
     </div>
+    <div class="classkey">Size <b>class</b> by flow footprint:
+      <span class="ck"><b>major</b> ≥ 1024 GB</span><span class="ck"><b>big</b> ≥ 400 GB</span><span class="ck"><b>medium</b> ≥ 10 GB</span><span class="ck"><b>small</b> &lt; 10 GB</span>
+      <span class="ck muted">— only <b>medium</b>/<b>small</b> flows are redirected; <b>major</b>/<b>big</b> stay on source</span></div>
     <div class="tblwrap">
       <div class="thead" id="thead"></div>
       <div class="vscroll" id="vscroll"><div class="vsizer" id="vsizer"></div>
