@@ -1,0 +1,42 @@
+GET metricbeat-*/_search
+{
+  "size": 1,
+  "query": { "bool": { "filter": [
+    { "term": { "kafka.consumergroup.id": "streamer-consumer-1" } },
+    { "match_phrase": { "environment": "prod" } },
+    { "range": { "@timestamp": { "gte": "now-1h", "lte": "now" } } }
+  ]}}
+}
+
+
+GET metricbeat-*/_search
+{
+  "size": 0,
+  "query": { "bool": { "filter": [
+    { "term": { "kafka.consumergroup.id": "streamer-consumer-1" } },
+    { "match_phrase": { "environment": "prod" } },
+    { "range": { "@timestamp": { "gte": "now-1h", "lte": "now" } } }
+  ]}},
+  "aggs": {
+    "flows": {
+      "composite": {
+        "size": 1000,
+        "sources": [
+          { "topic":     { "terms": { "field": "topic" } } },
+          { "partition": { "terms": { "field": "partition" } } }
+        ]
+      },
+      "aggs": {
+        "start": { "min": { "field": "kafka.consumergroup.offset" } },
+        "end":   { "max": { "field": "kafka.consumergroup.offset" } },
+        "delta": {
+          "bucket_script": {
+            "buckets_path": { "s": "start", "e": "end" },
+            "script": "params.e - params.s"
+          }
+        }
+      }
+    }
+  }
+}
+
