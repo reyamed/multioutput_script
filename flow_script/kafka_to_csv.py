@@ -48,7 +48,7 @@ from requests.auth import HTTPBasicAuth
 CANDIDATES = {
     "group":     ["kafka.consumergroup.id", "kafka.consumergroup.group"],
     "topic":     ["topic", "kafka.consumergroup.topic"],
-    "partition": ["partition", "kafka.consumergroup.partition"],
+    "partition": ["kafka.partition.id", "partition", "kafka.consumergroup.partition"],
     "offset":    ["kafka.consumergroup.offset", "offset"],
 }
 ENV_FIELD_DEFAULT = "environment"
