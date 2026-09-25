@@ -22,11 +22,11 @@ PREFIXES = ("direct", "final")
 
 
 def flow_of(topic):
-    """direct-<flow>-<version> / final-<flow>-<version> -> <flow>.
-    Drops a known prefix, then the trailing -<version>; keeps dashes inside the flow."""
+    """direct-<flow>_<version> / final-<flow>_<version> -> <flow>.
+    Drops a known prefix, then the trailing _<version>; keeps dashes inside the flow."""
     head, sep, rest = topic.partition("-")
     body = rest if (sep and head in PREFIXES) else topic
-    flow, sep2, _version = body.rpartition("-")
+    flow, sep2, _version = body.rpartition("_")
     return flow if sep2 else body
 
 
