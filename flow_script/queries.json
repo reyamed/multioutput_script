@@ -40,3 +40,17 @@ GET metricbeat-*/_search
   }
 }
 
+GET metricbeat-*/_search
+{
+  "size": 0,
+  "query": { "bool": { "filter": [
+    { "term": { "kafka.consumergroup.id": "streamer-consumer-1" } },
+    { "range": { "@timestamp": { "gte": "now-1h" } } }
+  ]}},
+  "aggs": {
+    "topic_ok":     { "terms": { "field": "topic", "size": 3 } },
+    "part_bare":    { "terms": { "field": "partition", "size": 3 } },
+    "part_nested":  { "terms": { "field": "kafka.consumergroup.partition", "size": 3 } },
+    "offset_stats": { "stats": { "field": "kafka.consumergroup.offset" } }
+  }
+}
