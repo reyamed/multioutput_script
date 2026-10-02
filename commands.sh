@@ -28,3 +28,12 @@ idx=$(find . -path "./${t}-*" -name '*.index' | wc -l)
 echo "partitions:            $parts"
 echo "index files:           $idx"
 echo "segments per partition: $((idx / parts))"
+
+elasticsearch_clusters:
+{% for cluster in elasticsearch_clusters %}
+  - cluster_name: "{{ cluster.cluster_name }}"
+    hosts:
+{% for host in cluster.hosts %}
+      - "{{ host }}"
+{% endfor %}
+{% endfor %}
