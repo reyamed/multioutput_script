@@ -49,3 +49,65 @@ def create_shards_component(
         raise RuntimeError(
             f"Couldn't create shard component {shards_component_name}, error: {error}"
         ) from error
+
+
+
+def _get_period_indices(es, pattern_date, period_matches):
+    """Shared body for daily/weekly/monthly index lookups.
+
+    :param pattern_date: regex with one capture group for the date part
+    :param period_matches: predicate on the captured group -> bool
+    :returns: list of index dicts, largest store_size first
+    """
+    indices_info = es.cat.indices(
+        format="json", h=["index", "store.size", "pri", "rep"]
+    )
+
+    indices = []
+    for index in indices_info:
+        name = index["index"]
+        if not (name.startswith("logs") or name.startswith("error")):
+            continue
+        match = re.match(pattern_date, name)
+        if not match or not period_matches(match.group(1)):
+            continue
+        indices.append({
+            "index": name,
+            "store_size": size_to_gb(index["store.size"]) if index["store.size"] else 0,
+            "pri_shards": int(index["pri"]),
+            "rep_shards": int(index["rep"]),
+        })
+
+    return sorted(indices, key=lambda x: x["store_size"], reverse=True)
+
+def get_daily_indices(es):
+    today = str(date.today())
+    pattern = r".*(\d{4}\.\d{2}\.\d{2})$"
+    try:
+        return _get_period_indices(
+            es, pattern, lambda d: d.replace(".", "-") == today
+        )
+    except Exception as e:
+        logging.error(f"Couldn't get daily indices, error: {e}")
+        return []
+
+
+def get_weekly_indices(es):
+    week_num = get_week_of_month(datetime.today())
+    current_week = date.today().strftime("%Y.%m") + f".w{week_num}"
+    pattern = rf".*(\d{{4}}\.\d{{2}}\.w{week_num})$"
+    try:
+        return _get_period_indices(es, pattern, lambda d: d == current_week)
+    except Exception as e:
+        logging.error(f"Couldn't get weekly indices, error: {e}")
+        return []
+
+
+def get_monthly_indices(es):
+    current_month = date.today().strftime("%Y.%m")
+    pattern = r".*(\d{4}\.\d{2})$"
+    try:
+        return _get_period_indices(es, pattern, lambda d: d == current_month)
+    except Exception as e:
+        logging.error(f"Couldn't get monthly indices, error: {e}")
+        return []
