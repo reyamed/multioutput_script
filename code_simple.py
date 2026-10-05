@@ -111,3 +111,48 @@ def get_monthly_indices(es):
     except Exception as e:
         logging.error(f"Couldn't get monthly indices, error: {e}")
         return []
+
+
+def rollover_index(es, index, env, max_shards, limit_size, token, execute=None):
+    latest_index = get_latest_rollover_index(es, env, index, token)
+
+    # Optimal shard count for the index (at least 1)
+    raw_optimal = round(latest_index["store_size"] / (limit_size * 2))
+    num_optimal_shards = max(raw_optimal, 1)
+
+    current_shards_number = latest_index["pri_shards"]
+
+    # Already optimal (or over) → nothing to do
+    if current_shards_number >= num_optimal_shards:
+        return
+
+    optimal_shards_name = f"{num_optimal_shards}_shards"
+
+    logging.info(f"******* Base index: {index['index']} ********")
+    logging.info(f"====> Latest index: {latest_index['index']} <======")
+    logging.info(
+        f"Index '{latest_index['index']}' current size: "
+        f"{latest_index['store_size']} GB, shards: {latest_index['pri_shards']}"
+    )
+    logging.info(f"Index to shard: '{latest_index['index']}'")
+
+    # Clamp to the max allowed shard count
+    num_optimal_shards, optimal_shards_name = check_max_shards(
+        es, num_optimal_shards, optimal_shards_name, max_shards
+    )
+
+    try:
+        if index["index"].startswith("logs"):
+            change_index_template(
+                es, latest_index, num_optimal_shards,
+                optimal_shards_name, max_shards, execute
+            )
+
+        for group_name in ("default", "bigflow"):
+            put_index_rollover(env, token, index["index"], group_name, execute)
+
+        logging.info("*" * 60)
+
+    except Exception as e:
+        logging.warning(f"index '{index['index']}' failed!, error {e}")
+        FAILED_INDICES[f"{index['index']}"] = e
