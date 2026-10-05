@@ -156,3 +156,30 @@ def rollover_index(es, index, env, max_shards, limit_size, token, execute=None):
     except Exception as e:
         logging.warning(f"index '{index['index']}' failed!, error {e}")
         FAILED_INDICES[f"{index['index']}"] = e
+
+
+
+import re
+from datetime import date
+
+# matches the YYYY.MM at the start of the date portion in all three formats
+INDEX_DATE_RE = re.compile(r"(\d{4})\.(\d{2})")
+
+def previous_month(ref=None):
+    ref = ref or date.today()
+    year, month = ref.year, ref.month - 1
+    if month == 0:          # January -> December of prior year
+        month, year = 12, year - 1
+    return year, month
+
+def index_year_month(name):
+    m = INDEX_DATE_RE.search(name)
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+def delete_previous_month_indices(db, ref=None):
+    target = previous_month(ref)
+    names = db.get_all_index_names()          # <- adapt to your DB
+    to_delete = [n for n in names if index_year_month(n) == target]
+    for n in to_delete:
+        db.delete_index(n)                    # <- adapt to your DB
+    return to_delete
