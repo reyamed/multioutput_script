@@ -199,25 +199,26 @@ def _collect_sizes(es, names):
     """Sizes of the candidate indices that actually exist."""
     return [_total_store_size(es, n) for n in names if es.indices.exists(index=n)]
 
-# daily — max over last few days
+# daily
 def get_max_size(self, es, index):
-    base = re.match(DATE_PATTERN, index["index"]).group(1)
-    names = [f"{base}{(date.today() - timedelta(days=i)).strftime('%Y.%m.%d')}"
+    bucket = dissect_index(index["index"])["timebucket"]
+    names = [index["index"].replace(bucket,
+                (date.today() - timedelta(days=i)).strftime('%Y.%m.%d'))
              for i in (1, 5)]
     return max([index["store_size"], *_collect_sizes(es, names)])
 
-# weekly — max over last 3 weeks
+# weekly
 def get_max_size(es, index):
-    base = re.match(WEEK_PATTERN, index["index"]).group(1)
+    bucket = dissect_index(index["index"])["timebucket"]
     names = []
     for i in range(3):
         d = datetime.today() - timedelta(weeks=i)
-        names.append(f"{base}{d.strftime('%Y.%m')}.w{get_week_of_month(d)}")
+        names.append(index["index"].replace(
+            bucket, f"{d.strftime('%Y.%m')}.w{get_week_of_month(d)}"))
     return max(_collect_sizes(es, names), default=0)
 
-# monthly — sum over all collect versions
+# Monthly
 def get_max_size(es, index):
-    result = MONTHLY_PATTERN.dissect(index["index"])
-    v = int(result["collect_version"])
+    v = int(dissect_index(index["index"])["collect_version"])
     names = [index["index"].replace(f"_v{v}.", f"_v{i}.") for i in range(1, v + 1)]
     return sum(_collect_sizes(es, names))
