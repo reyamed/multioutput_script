@@ -183,3 +183,41 @@ def delete_previous_month_indices(db, ref=None):
     for n in to_delete:
         db.delete_index(n)                    # <- adapt to your DB
     return to_delete
+
+
+def _total_store_size(es, name):
+    """Store size (GB) of an index plus all its rollovers."""
+    return sum(
+        size_to_gb(i["store.size"])
+        for i in es.cat.indices(
+            index=f"{name},{name}_*", format="json",
+            h=["index", "store.size", "pri", "rep"],
+        )
+    )
+
+def _collect_sizes(es, names):
+    """Sizes of the candidate indices that actually exist."""
+    return [_total_store_size(es, n) for n in names if es.indices.exists(index=n)]
+
+# daily — max over last few days
+def get_max_size(self, es, index):
+    base = re.match(DATE_PATTERN, index["index"]).group(1)
+    names = [f"{base}{(date.today() - timedelta(days=i)).strftime('%Y.%m.%d')}"
+             for i in (1, 5)]
+    return max([index["store_size"], *_collect_sizes(es, names)])
+
+# weekly — max over last 3 weeks
+def get_max_size(es, index):
+    base = re.match(WEEK_PATTERN, index["index"]).group(1)
+    names = []
+    for i in range(3):
+        d = datetime.today() - timedelta(weeks=i)
+        names.append(f"{base}{d.strftime('%Y.%m')}.w{get_week_of_month(d)}")
+    return max(_collect_sizes(es, names), default=0)
+
+# monthly — sum over all collect versions
+def get_max_size(es, index):
+    result = MONTHLY_PATTERN.dissect(index["index"])
+    v = int(result["collect_version"])
+    names = [index["index"].replace(f"_v{v}.", f"_v{i}.") for i in range(1, v + 1)]
+    return sum(_collect_sizes(es, names))
