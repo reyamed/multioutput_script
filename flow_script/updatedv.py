@@ -62,3 +62,42 @@ def fetch_all_index_patterns() -> List[Dict[str, Any]]:
 
     log.info(f"Total unique index-patterns retrieved: {len(all_objects)}")
     return all_objects
+
+
+def put_topics(self, group, new_topics_dicto):
+    """
+    Update whitelist/blacklist for a group.
+    A topic newly whitelisted is removed from the blacklist, and vice versa.
+    """
+    current_blacklisted_topics = self._get_blacklist_topics(group)
+    current_whitelisted_topics = self._get_whitelist_topics(group)
+
+    new_whitelisted = set(new_topics_dicto["whitelisted_topics"])
+    new_blacklisted = set(new_topics_dicto["blacklisted_topics"])
+
+    all_whitelisted = (set(current_whitelisted_topics) | new_whitelisted) - new_blacklisted
+    all_blacklisted = (set(current_blacklisted_topics) | new_blacklisted) - new_whitelisted
+
+    payload = {
+        "kafka_topics_whitelist": list(all_whitelisted),
+        "kafka_topics_blacklist": list(all_blacklisted),
+    }
+    self._request(endpoint_url=f"groups/{group}/config", req_type="POST", payload=payload)
+
+new_whitelisted = set(new_topics_dicto["whitelisted_topics"])
+new_blacklisted = set(new_topics_dicto["blacklisted_topics"])
+
+current_white = set(current_whitelisted_topics)
+
+# Drop whitelist additions already covered by an existing catch-all (e.g. direct-*)
+new_whitelisted = {t for t in new_whitelisted if not _covered(t, current_white)}
+
+all_whitelisted = (current_white | new_whitelisted) - new_blacklisted
+all_blacklisted = (set(current_blacklisted_topics) | new_blacklisted) - new_whitelisted
+
+def _covered(topic, patterns):
+    """True if `topic` is subsumed by a broader wildcard already present."""
+    for p in patterns:
+        if p != topic and p.endswith("*") and topic.startswith(p[:-1]):
+            return True
+    return False
