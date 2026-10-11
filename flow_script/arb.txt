@@ -1,0 +1,11 @@
+Split_cluster/
+└── laas_scripts/
+    ├── flows_manager/
+    │   ├── api_client.py
+    │   ├── config.yml
+    │   ├── dist_plan.json
+    │   ├── es_client.py
+    │   ├── flows_distributer.py
+    │   ├── flows_manager.py
+    │   ├── requirements.txt
+    │   └── streamer_api_client.py
