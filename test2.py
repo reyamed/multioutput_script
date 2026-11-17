@@ -344,3 +344,20 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+import threading
+
+import urllib3.connection
+
+_SSL_SETUP_LOCK = threading.Lock()
+_original_ssl_wrap_socket = urllib3.connection.ssl_wrap_socket
+
+
+def _locked_ssl_wrap_socket(*args, **kwargs):
+    with _SSL_SETUP_LOCK:
+        return _original_ssl_wrap_socket(*args, **kwargs)
+
+
+if getattr(urllib3.connection.ssl_wrap_socket, "__name__", "") != "_locked_ssl_wrap_socket":
+    urllib3.connection.ssl_wrap_socket = _locked_ssl_wrap_socket
